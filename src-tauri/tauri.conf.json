@@ -43,7 +43,7 @@
       "deb": {
         "section": "utils",
         "priority": "optional",
-        "depends": ["pciutils", "x11-utils", "xdotool", "wmctrl", "libgtk-layer-shell0"],
+        "depends": ["pciutils", "x11-utils", "xdotool", "wmctrl", "libgtk-layer-shell0", "scx-loader", "scx-scheds"],
         "recommends": ["gamemode", "mangohud", "pkexec"],
         "preRemoveScript": "resources/debian/prerm",
         "postInstallScript": "resources/debian/postinst",

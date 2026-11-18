@@ -132,3 +132,7 @@ First stable release.
   the levers go back to their values, restarted on an upgrade, and its state
   is removed on purge. New dependencies: `pciutils`, `x11-utils`, `xdotool`
   and `wmctrl`, which the overlay and the monitor use.
+- The schedulers of sched_ext come with the panel: it depends on `scx-loader`,
+  the D-Bus service it asks to start and switch them, and on `scx-scheds`, the
+  schedulers. Debian packages neither; Soplos builds them (scx-deb). They only
+  run on a kernel with sched_ext, the gaming kernels of Soplos.
