@@ -1,0 +1,9 @@
+pub mod gamemode_ini;
+pub mod governor;
+pub mod library;
+pub mod mangohud;
+pub mod monitor;
+pub mod privileged;
+pub mod service;
+pub mod settings;
+pub mod tweaks;

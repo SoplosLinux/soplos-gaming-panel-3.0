@@ -1,0 +1,41 @@
+[package]
+name = "soplos-gaming-panel"
+version = "3.0.0"
+description = "Soplos Gaming Panel"
+authors = ["Sergi Perich <info@soploslinux.com>"]
+license = "GPL-3.0-or-later"
+edition = "2021"
+
+[lib]
+name = "soplos_gaming_panel_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# No "devtools" feature here: Tauri already enables the inspector on debug
+# builds; declaring the feature would force it on in release builds too.
+# "tray-icon" is the tray of the panel and "image-png" reads its small picture.
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-global-shortcut = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+# The overlay as a widget of the desktop on Wayland: a layer-shell surface,
+# which the compositor keeps in its corner and out of any tiling (KWin,
+# xfwl4). The 0.8 line goes with the GTK 0.18 that Tauri uses.
+gtk = "0.18"
+# v0_6: is_supported (0.5) and set_keyboard_mode (0.6) of the C library.
+# Debian has 0.9 in trixie and 0.10 in forky.
+gtk-layer-shell = { version = "0.8", features = ["v0_6"] }
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

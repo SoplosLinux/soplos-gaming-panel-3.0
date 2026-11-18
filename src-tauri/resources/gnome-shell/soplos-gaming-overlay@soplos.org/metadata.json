@@ -1,0 +1,7 @@
+{
+  "uuid": "soplos-gaming-overlay@soplos.org",
+  "name": "Soplos Gaming Overlay",
+  "description": "Keeps the overlay of Soplos Gaming Panel in its corner or against its edge, above the windows and out of the tiling, as the panel of the desktop it is.",
+  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "url": "https://soplos.org"
+}

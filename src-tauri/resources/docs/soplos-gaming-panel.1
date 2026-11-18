@@ -1,0 +1,65 @@
+.TH "SOPLOS-GAMING-PANEL" "1" "2026-11-18" "Soplos Linux" "User Commands"
+.SH NAME
+soplos-gaming-panel \- live gaming companion for Soplos Linux
+.SH SYNOPSIS
+.B soplos-gaming-panel
+[\fB\-\-toggle\fR | \fB\-\-show\fR | \fB\-\-hud\-toggle\fR]
+.SH DESCRIPTION
+.B Soplos Gaming Panel
+is the visual surface of the machine while a game runs. It controls
+GameMode over D\-Bus, reads and writes the configuration of MangoHud,
+watches the use of the processor, the graphics card, the memory and the
+temperatures, and opens the games of Steam, Lutris and Heroic that are
+already installed.
+.PP
+The tools it controls are the ones that Soplos Welcome installs in its
+Gaming Center; the panel does not install them again.
+.SH OPTIONS
+.TP
+.B \-\-toggle
+Shows the panel if it is hidden and hides it if it is shown. This is what
+the shortcut of the desktop runs.
+.TP
+.B \-\-show
+Shows the panel. It is what a second launch does when nothing else is asked.
+.TP
+.B \-\-hud\-toggle
+Turns the small overlay over the game on or off.
+.TP
+.B \-\-run\-ops \fIFILE\fR
+Internal: runs as root the operations of \fIFILE\fR. Only pkexec starts the
+program this way, and it never opens a window.
+.TP
+.B \-\-daemon
+Internal: keeps the governor of the games running with no window. Only the
+systemd unit starts the program this way.
+.TP
+.B \-\-daemon\-restore
+Internal: gives the machine back its own settings after the daemon stops.
+.SH FILES
+.TP
+.I ~/.config/soplos-gaming-panel/config.json
+The choices of the user: language, theme, shortcuts and what the overlay
+shows.
+.TP
+.I ~/.config/autostart/soplos-gaming-panel.desktop
+Present while the panel starts with the session.
+.TP
+.I ~/.cache/soplos-gaming-panel
+The requests of the administrator step.
+.TP
+.I ~/.local/share/soplos-gaming-panel/covers
+The covers the user chooses for the games of the library.
+.TP
+.I ~/.local/share/soplos-gaming-panel/mangohud\-fps.csv
+The log the panel reads the frames per second from, written by MangoHud when
+the panel asks it to.
+.TP
+.I /var/lib/soplos-gaming-panel/backup
+The copies of the files an administrator step touches, taken before it
+writes them.
+.SH SEE ALSO
+.BR gamemoderun (1),
+.BR mangohud (1)
+.SH AUTHOR
+Sergi Perich <info@soploslinux.com>

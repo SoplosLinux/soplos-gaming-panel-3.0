@@ -1,0 +1,32 @@
+[Unit]
+Description=Soplos Gaming Panel kernel governor
+Documentation=man:soplos-gaming-panel(1)
+After=local-fs.target
+# The profile touches /sys and /proc/sys, which exist before this point.
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/soplos-gaming-panel --daemon
+# Whatever happens to the daemon, the machine goes back to its own settings:
+# this runs after a clean stop, a crash and a kill.
+ExecStopPost=/usr/bin/soplos-gaming-panel --daemon-restore
+Restart=on-failure
+RestartSec=2
+# The daemon only needs to write a few kernel nodes of a fixed list.
+NoNewPrivileges=yes
+ProtectHome=read-only
+ProtectSystem=strict
+# systemd makes both folders and opens them for writing: /run for the state of
+# the profile and the socket, /var/lib for the automatic settings and the
+# history. A folder named in ReadWritePaths= that does not exist yet stops the
+# unit from starting, and /run is empty after every boot.
+RuntimeDirectory=soplos-gaming-panel
+# The state of the profile has to be there for ExecStopPost and for the next
+# start, which puts back what a crash left applied.
+RuntimeDirectoryPreserve=yes
+StateDirectory=soplos-gaming-panel
+ReadWritePaths=/sys /proc/sys
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

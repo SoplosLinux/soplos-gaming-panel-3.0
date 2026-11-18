@@ -1,0 +1,19 @@
+#!/bin/sh
+# What the program leaves on the computer when it is removed. The gaming
+# tweaks it can write in /etc are the same ones Soplos Welcome writes, so they
+# stay; on purge the settings of the automatic profile, the history and the
+# copies of the files the tweaks replaced go away.
+set -e
+
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload >/dev/null 2>&1 || true
+    fi
+    rm -rf /run/soplos-gaming-panel
+fi
+
+if [ "$1" = "purge" ]; then
+    rm -rf /var/lib/soplos-gaming-panel
+fi
+
+exit 0

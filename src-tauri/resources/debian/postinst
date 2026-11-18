@@ -1,0 +1,13 @@
+#!/bin/sh
+# After an install or an upgrade: systemd reads the unit again, and a governor
+# service that was running is restarted so it runs the new program. A service
+# that was off stays off: the user turns it on from the window.
+# It never makes the installation fail.
+set -e
+
+if [ "$1" = "configure" ] && [ -d /run/systemd/system ]; then
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    systemctl try-restart soplos-gaming-panel.service >/dev/null 2>&1 || true
+fi
+
+exit 0

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "soplos-gaming-panel",
+  "version": "3.0.0",
+  "identifier": "org.soplos.gamingpanel",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Soplos Gaming Panel",
+        "width": 1100,
+        "height": 720,
+        "minWidth": 900,
+        "minHeight": 600,
+        "resizable": true,
+        "decorations": false,
+        "transparent": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["deb"],
+    "publisher": "Sergi Perich",
+    "homepage": "https://soplos.org",
+    "copyright": "Copyright © 2026 Sergi Perich",
+    "license": "GPL-3.0-or-later",
+    "licenseFile": "../LICENSE",
+    "category": "Utility",
+    "shortDescription": "Live gaming companion for Soplos Linux",
+    "longDescription": "Control GameMode while playing, read and write the configuration of MangoHud, watch the use of the machine and open the games of Steam, Lutris and Heroic, from a small overlay drawn over the game.",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.png"],
+    "linux": {
+      "deb": {
+        "section": "utils",
+        "priority": "optional",
+        "depends": ["pciutils", "x11-utils", "xdotool", "wmctrl", "libgtk-layer-shell0"],
+        "recommends": ["gamemode", "mangohud", "pkexec"],
+        "preRemoveScript": "resources/debian/prerm",
+        "postInstallScript": "resources/debian/postinst",
+        "postRemoveScript": "resources/debian/postrm",
+        "changelog": "../CHANGELOG.md",
+        "desktopTemplate": "resources/debian/soplos-gaming-panel.desktop.hbs",
+        "files": {
+          "/usr/share/doc/soplos-gaming-panel/copyright": "resources/debian/copyright",
+          "/usr/share/doc/soplos-gaming-panel/screenshots/screenshot01.png": "resources/screenshots/screenshot01.png",
+          "/usr/share/doc/soplos-gaming-panel/screenshots/screenshot02.png": "resources/screenshots/screenshot02.png",
+          "/usr/share/doc/soplos-gaming-panel/screenshots/screenshot03.png": "resources/screenshots/screenshot03.png",
+          "/usr/share/doc/soplos-gaming-panel/screenshots/screenshot04.png": "resources/screenshots/screenshot04.png",
+          "/usr/share/doc/soplos-gaming-panel/screenshots/screenshot05.png": "resources/screenshots/screenshot05.png",
+          "/usr/lib/systemd/system/soplos-gaming-panel.service": "resources/systemd/soplos-gaming-panel.service",
+          "/usr/share/polkit-1/actions/org.soplos.gamingpanel.policy": "resources/polkit/org.soplos.gamingpanel.policy",
+          "/usr/share/metainfo/org.soplos.gamingpanel.metainfo.xml": "resources/appstream/org.soplos.gamingpanel.metainfo.xml",
+          "/usr/share/man/man1/soplos-gaming-panel.1.gz": "resources/docs/soplos-gaming-panel.1.gz",
+          "/usr/share/gnome-shell/extensions/soplos-gaming-overlay@soplos.org/metadata.json": "resources/gnome-shell/soplos-gaming-overlay@soplos.org/metadata.json",
+          "/usr/share/gnome-shell/extensions/soplos-gaming-overlay@soplos.org/extension.js": "resources/gnome-shell/soplos-gaming-overlay@soplos.org/extension.js"
+        }
+      }
+    }
+  }
+}

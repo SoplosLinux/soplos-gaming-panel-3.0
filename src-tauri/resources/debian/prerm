@@ -1,0 +1,12 @@
+#!/bin/sh
+# Before the files go away: the governor service is stopped and taken out of
+# the boot while its program is still there, so its ExecStopPost puts back
+# every lever a game left applied. On an upgrade the service keeps running;
+# postinst restarts it with the new program.
+set -e
+
+if [ "$1" = "remove" ] && [ -d /run/systemd/system ]; then
+    systemctl disable --now soplos-gaming-panel.service >/dev/null 2>&1 || true
+fi
+
+exit 0
