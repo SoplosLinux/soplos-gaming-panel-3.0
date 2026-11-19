@@ -70,8 +70,12 @@ pub fn write(path: &Path, value: &str) -> io::Result<()> {
     // Truncating is what a shell does with `echo value > node`, and it is what
     // keeps a shorter value from leaving the tail of the old one behind.
     let mut file = fs::OpenOptions::new().write(true).truncate(true).open(path)?;
-    file.write_all(value.as_bytes())?;
-    file.write_all(b"\n")
+    // One write, as `echo` does. Each write to /sys reaches the kernel as a
+    // request of its own: the value and then the newline alone in a second
+    // write made the node of the huge pages refuse the newline (Invalid
+    // argument) after it had taken the value, so a restore that worked was
+    // reported as failed and the game mode could not be turned off.
+    file.write_all(format!("{value}\n").as_bytes())
 }
 
 /// Splits a space separated list of accepted values, as the kernel writes it.

@@ -16,9 +16,7 @@ fn autostart_file() -> Option<PathBuf> {
 /// The program that is running: in a package it is the one in /usr/bin, which
 /// is also the one the session starts later.
 fn command() -> String {
-    std::env::current_exe()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|_| "soplos-gaming-panel".to_string())
+    crate::program_path()
 }
 
 pub fn is_enabled() -> bool {

@@ -38,6 +38,22 @@ pub fn run_daemon_restore() -> i32 {
     daemon::restore_and_report()
 }
 
+/// Where this program is, to start it again (pkexec, the shortcuts, the start
+/// with the session). After an upgrade the program that is still running was
+/// replaced on the disk, and the kernel names it "<path> (deleted)": that path
+/// does not exist, so the mark is taken away to point at the new program.
+pub fn program_path() -> String {
+    let path = std::env::current_exe()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let path = path.trim_end_matches(" (deleted)").to_string();
+    if path.is_empty() {
+        "/usr/bin/soplos-gaming-panel".to_string()
+    } else {
+        path
+    }
+}
+
 pub fn show_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.unminimize();

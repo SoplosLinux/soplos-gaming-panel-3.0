@@ -119,6 +119,26 @@ First stable release.
 - An error of the GameMode page vanished at once: the reading of the daemon,
   every two seconds, wiped it. An error of something the user did now stays
   until the next action.
+- The game mode could not be turned off on any machine with transparent huge
+  pages: their node lists its options with the chosen one in brackets
+  (`always [madvise] never`), the daemon saved that whole line and the kernel
+  refused it on the restore (Invalid argument). Only the chosen option is saved
+  now (the disk scheduler is read the same way), and a state saved the old way
+  is cleaned when it is restored, so a machine stuck in game mode comes out of
+  it after the upgrade.
+- A failed restore showed a block of JSON; it now says which levers could not
+  go back and why, one a line.
+- Every lever was written in two writes, the value and then the newline. Each
+  write to `/sys` is a request of its own, and the node of the huge pages took
+  the value and refused the newline alone (Invalid argument): the restore had
+  worked, was reported as failed, and the game mode stayed on. A value and its
+  newline now go in one write, as `echo` does.
+- After an upgrade with the panel open, every step that asks for the password
+  failed with `Error accessing /usr/bin/soplos-gaming-panel (deleted)`: the
+  panel started itself again through pkexec at the path of its own process,
+  which the kernel names "(deleted)" once the file is replaced. The mark is
+  taken away, for pkexec, for the shortcuts written in the desktop and for
+  the start with the session.
 
 ### Changed
 

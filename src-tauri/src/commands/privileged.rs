@@ -84,8 +84,8 @@ pub fn run_as_root(ops: &[Op]) -> Result<(), String> {
         out.write_all(request.as_bytes()).map_err(|e| e.to_string())?;
     }
 
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let output = Command::new("pkexec").arg(exe).arg("--run-ops").arg(&file).output();
+    let exe = crate::program_path();
+    let output = Command::new("pkexec").arg(&exe).arg("--run-ops").arg(&file).output();
     let _ = fs::remove_file(&file);
 
     match output {

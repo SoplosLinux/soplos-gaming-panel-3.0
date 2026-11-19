@@ -414,7 +414,8 @@
   {#if error}
     <div class="border border-danger/50 bg-danger/10 rounded px-3 py-2 mt-3">
       <p class="text-[0.8rem] text-danger">{$_("gamemode.applyError")}</p>
-      <p class="text-[0.74rem] text-text-muted mt-0.5 break-all">{error}</p>
+      <!-- One lever per line when several could not go back. -->
+      <p class="text-[0.74rem] text-text-muted mt-0.5 break-all whitespace-pre-line">{error}</p>
     </div>
   {/if}
 </div>

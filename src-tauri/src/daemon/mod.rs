@@ -136,7 +136,11 @@ fn apply_leaving(chosen: &str, leave: &[&str]) -> Result<Value, String> {
     let mut entries = Vec::with_capacity(plan.len());
     for (lever, _) in &plan {
         for path in lever.paths() {
-            let value = lever::read(&path).map_err(|error| format!("{}: {error}", lever.key()))?;
+            // A node that lists its options ("always [madvise] never") takes
+            // back only the one in brackets: writing the whole line is refused.
+            let value = lever::read(&path)
+                .map(|raw| lever::current(&raw))
+                .map_err(|error| format!("{}: {error}", lever.key()))?;
             entries.push(state::Entry {
                 key: lever.key().to_string(),
                 path: path.display().to_string(),
@@ -191,7 +195,9 @@ fn restore_in(dir: &std::path::Path) -> Result<Value, String> {
             done.push(json!({ "key": entry.key, "value": entry.value }));
             continue;
         }
-        match lever::write(std::path::Path::new(&entry.path), &entry.value) {
+        // lever::current also cleans a state saved by an older version, which
+        // kept the whole list of options of such a node.
+        match lever::write(std::path::Path::new(&entry.path), &lever::current(&entry.value)) {
             Ok(()) => done.push(json!({ "key": entry.key, "value": entry.value })),
             Err(_) => pending.push(entry),
         }
@@ -203,9 +209,9 @@ fn restore_in(dir: &std::path::Path) -> Result<Value, String> {
     // comes back this way too.
     let mut failures = Vec::new();
     for entry in pending {
-        match lever::write(std::path::Path::new(&entry.path), &entry.value) {
+        match lever::write(std::path::Path::new(&entry.path), &lever::current(&entry.value)) {
             Ok(()) => done.push(json!({ "key": entry.key, "value": entry.value })),
-            Err(error) => failures.push(json!({ "key": entry.key, "error": error.to_string() })),
+            Err(error) => failures.push(format!("{}: {error}", entry.key)),
         }
     }
     // A failure keeps the file, so the next restore path tries again instead of
@@ -214,7 +220,8 @@ fn restore_in(dir: &std::path::Path) -> Result<Value, String> {
         state::clear(dir).map_err(|error| format!("estado.json: {error}"))?;
         Ok(json!({ "restored": done }))
     } else {
-        Err(json!({ "restored": done, "failed": failures }).to_string())
+        // What the window shows: the levers that could not go back, one a line.
+        Err(failures.join("\n"))
     }
 }
 
@@ -661,6 +668,19 @@ mod tests {
         // The name somewhere else is not GameMode running the game.
         assert!(!preloads_gamemode(b"NOTE=libgamemodeauto\0LD_PRELOAD=libmangohud.so\0"));
         assert!(!preloads_gamemode(b""));
+    }
+
+    #[test]
+    fn a_node_that_lists_its_options_gets_back_only_the_chosen_one() {
+        let dir = sandbox("thp");
+        let node = dir.join("enabled");
+        fs::write(&node, "[always] madvise never\n").unwrap();
+        // What an older version saved: the whole line of the node.
+        let entries = vec![state::Entry { key: "kernel.thp".to_string(), path: node.display().to_string(), value: "always [madvise] never".to_string() }];
+        state::save(&dir, &state::State { pid: 1, seconds: state::now(), profile: "max".to_string(), entries }).unwrap();
+        assert!(restore_in(&dir).is_ok());
+        assert_eq!(lever::read(&node).unwrap(), "madvise");
+        assert!(state::load(&dir).is_none());
     }
 
     #[test]

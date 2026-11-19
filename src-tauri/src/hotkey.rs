@@ -28,9 +28,7 @@ fn desktop() -> String {
 }
 
 fn command_for(action: Action) -> String {
-    let exe = std::env::current_exe()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|_| "soplos-gaming-panel".to_string());
+    let exe = crate::program_path();
     format!("{exe} {}", match action {
         Action::Toggle => "--toggle",
         Action::Hud => "--hud-toggle",
