@@ -1,4 +1,4 @@
-º# Changelog
+# Changelog
 
 All notable changes to Soplos Gaming Panel are documented in this file.
 
