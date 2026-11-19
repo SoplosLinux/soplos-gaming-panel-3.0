@@ -2,6 +2,7 @@ import "./styles/global.css";
 import { initI18n } from "./i18n";
 import { initTheme } from "./lib/theme";
 import { getSettings, type Settings } from "./lib/api";
+import { setTempUnit } from "./lib/units";
 import App from "./App.svelte";
 
 // This is a desktop program, not a web page: the context menu of the web
@@ -21,6 +22,7 @@ async function start() {
     // Without the file of settings the program opens with the defaults.
   }
   initTheme(saved?.theme ?? null);
+  setTempUnit(saved?.tempUnit);
   await initI18n(saved?.language ?? null);
   new App({ target: document.getElementById("app")! });
 }

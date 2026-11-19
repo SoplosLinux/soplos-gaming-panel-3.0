@@ -1,9 +1,25 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { listen } from "@tauri-apps/api/event";
-  import { _ } from "svelte-i18n";
-  import { Check, AlertTriangle } from "lucide-svelte";
-  import { getSettings, setSettings, applyHotkeys, type Settings, type HudCorner, type HudMode, type HudSettings, type HudMetric } from "../lib/api";
+  import { _, locale } from "svelte-i18n";
+  import { Check, AlertTriangle, Download, Upload, RotateCcw, Trash2 } from "lucide-svelte";
+  import { ask, open, save } from "@tauri-apps/plugin-dialog";
+  import {
+    getSettings,
+    setSettings,
+    applyHotkeys,
+    historyClear,
+    settingsExport,
+    settingsImport,
+    settingsReset,
+    type Settings,
+    type HudCorner,
+    type HudMode,
+    type HudSettings,
+    type HudMetric,
+  } from "../lib/api";
+  import { currentChoice, setThemeChoice, theme, type ThemeName } from "../lib/theme";
+  import { setTempUnit } from "../lib/units";
   import Switch from "../components/Switch.svelte";
 
   let s: Settings | null = null;
@@ -30,7 +46,27 @@
     "fps",
     "frametime",
     "net",
+    "disk",
+    "fans",
+    "voltage",
+    "battery",
+    "scheduler",
+    "profile",
+    "session",
+    "clock",
   ];
+  const refreshSteps = [500, 1000, 2000];
+  /** 0 is "never"; the rest are degrees Celsius. */
+  const alertSteps = [0, 70, 75, 80, 85, 90, 95, 100];
+  const themes: { key: ThemeName | null; label: string }[] = [
+    { key: null, label: "settings.look.themeDesktop" },
+    { key: "light", label: "settings.look.themeLight" },
+    { key: "dark", label: "settings.look.themeDark" },
+  ];
+  let themeChoice: ThemeName | null = currentChoice();
+  // The button of the sidebar changes the theme too: the choice is read
+  // again whenever the theme on screen changes.
+  $: $theme, (themeChoice = currentChoice());
 
   let unlistenHud: (() => void) | undefined;
 
@@ -105,6 +141,75 @@
 
   function metricOn(key: HudMetric): boolean {
     return s ? s.hud.metrics.includes(key) : false;
+  }
+
+  function chooseTheme(key: ThemeName | null) {
+    themeChoice = key;
+    setThemeChoice(key);
+  }
+
+  async function chooseUnit(unit: "c" | "f") {
+    await patch({ tempUnit: unit });
+    setTempUnit(unit);
+  }
+
+  /** Degrees Celsius as the unit chosen, for the list of alerts. */
+  function alertLabel(celsius: number, unit: "c" | "f"): string {
+    if (celsius === 0) return $_("settings.hud.alertNever");
+    return unit === "f" ? `${Math.round((celsius * 9) / 5 + 32)} °F` : `${celsius} °C`;
+  }
+
+  /** What comes back from an import or a reset is applied to the whole
+   * window: theme, language and units, not only to this page. */
+  function adopt(next: Settings) {
+    s = next;
+    themeChoice = next.theme;
+    setThemeChoice(next.theme, false);
+    setTempUnit(next.tempUnit);
+    const desktop = (navigator.language ?? "en").split("-")[0].toLowerCase();
+    locale.set(next.language ?? desktop);
+  }
+
+  async function exportSettings() {
+    try {
+      const path = await save({ defaultPath: "soplos-gaming-panel.json", filters: [{ name: "JSON", extensions: ["json"] }] });
+      if (!path) return;
+      await settingsExport(path);
+      note = { ok: true, text: $_("settings.data.exported") };
+    } catch (e) {
+      note = { ok: false, text: String(e) };
+    }
+  }
+
+  async function importSettings() {
+    try {
+      const path = await open({ multiple: false, directory: false, filters: [{ name: "JSON", extensions: ["json"] }] });
+      if (typeof path !== "string") return;
+      adopt(await settingsImport(path));
+      note = { ok: true, text: $_("settings.data.imported") };
+    } catch (e) {
+      note = { ok: false, text: String(e) };
+    }
+  }
+
+  async function resetSettings() {
+    if (!(await ask($_("settings.data.resetAsk"), { title: "Soplos Gaming Panel", kind: "warning" }))) return;
+    try {
+      adopt(await settingsReset());
+      note = { ok: true, text: $_("settings.data.resetDone") };
+    } catch (e) {
+      note = { ok: false, text: String(e) };
+    }
+  }
+
+  async function clearHistory() {
+    if (!(await ask($_("settings.data.historyAsk"), { title: "Soplos Gaming Panel", kind: "warning" }))) return;
+    try {
+      await historyClear();
+      note = { ok: true, text: $_("settings.data.historyDone") };
+    } catch (e) {
+      note = { ok: false, text: String(e) };
+    }
   }
 
   // The shortcut is pressed, not typed. The field only says which of the two
@@ -186,10 +291,38 @@
           on:blur={() => (capturing = null)}
         />
       </label>
-      <div class="flex flex-col gap-1.5 sm:w-[180px] sm:shrink-0">
-        <span class="text-[0.78rem] text-text whitespace-nowrap">{$_("settings.session.autostart")}</span>
-        <div class="h-8 flex items-center">
-          <Switch checked={s.startWithSession} label={$_("settings.session.autostart")} on:change={(e) => patch({ startWithSession: e.detail })} />
+    </div>
+  </section>
+
+  <section class="mb-6">
+    <h2 class="text-[0.95rem] font-semibold text-text-bright mb-1">{$_("settings.session.title")}</h2>
+    <p class="text-[0.78rem] text-text-muted mb-3">{$_("settings.session.hint")}</p>
+    <div class="border border-border rounded-lg divide-y divide-border">
+      <div class="flex items-center gap-3 px-3 py-2.5">
+        <Switch checked={s.startWithSession} label={$_("settings.session.autostart")} on:change={(e) => patch({ startWithSession: e.detail })} />
+        <span class="text-[0.82rem] text-text">{$_("settings.session.autostart")}</span>
+      </div>
+      <div class="flex items-center gap-3 px-3 py-2.5">
+        <Switch
+          checked={s.startMinimized}
+          disabled={!s.startWithSession}
+          label={$_("settings.session.minimized")}
+          on:change={(e) => patch({ startMinimized: e.detail })}
+        />
+        <span class="text-[0.82rem] {s.startWithSession ? 'text-text' : 'text-text-muted'}">{$_("settings.session.minimized")}</span>
+      </div>
+      <div class="flex items-center gap-3 px-3 py-2.5">
+        <Switch checked={s.closeToTray} label={$_("settings.session.closeToTray")} on:change={(e) => patch({ closeToTray: e.detail })} />
+        <div class="min-w-0">
+          <p class="text-[0.82rem] text-text">{$_("settings.session.closeToTray")}</p>
+          <p class="text-[0.72rem] text-text-muted">{s.closeToTray ? $_("settings.session.closeToTrayOn") : $_("settings.session.closeToTrayOff")}</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 px-3 py-2.5">
+        <Switch checked={s.notifyGameMode} label={$_("settings.session.notify")} on:change={(e) => patch({ notifyGameMode: e.detail })} />
+        <div class="min-w-0">
+          <p class="text-[0.82rem] text-text">{$_("settings.session.notify")}</p>
+          <p class="text-[0.72rem] text-text-muted">{$_("settings.session.notifyHint")}</p>
         </div>
       </div>
     </div>
@@ -203,6 +336,14 @@
       <div class="flex items-center gap-3 px-3 py-2.5">
         <Switch checked={s.hud.enabled} label={$_("settings.hud.enabled")} on:change={(e) => patchHud({ enabled: e.detail })} />
         <span class="text-[0.82rem] text-text">{$_("settings.hud.enabled")}</span>
+      </div>
+
+      <div class="flex items-center gap-3 px-3 py-2.5">
+        <Switch checked={s.hud.autoShow} label={$_("settings.hud.autoShow")} on:change={(e) => patchHud({ autoShow: e.detail })} />
+        <div class="min-w-0">
+          <p class="text-[0.82rem] text-text">{$_("settings.hud.autoShow")}</p>
+          <p class="text-[0.72rem] text-text-muted">{$_("settings.hud.autoShowHint")}</p>
+        </div>
       </div>
 
       <div class="px-3 py-3">
@@ -310,6 +451,104 @@
           {/each}
         </div>
       </div>
+
+      <div class="px-3 py-3 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:gap-6">
+        <div class="flex flex-col gap-1.5">
+          <span class="text-[0.74rem] text-text-muted">{$_("settings.hud.refresh")}</span>
+          <div class="flex gap-1.5">
+            {#each refreshSteps as step (step)}
+              <button
+                class="px-3 h-8 rounded border text-[0.8rem] tabular-nums transition-colors {s.hud.refreshMs === step
+                  ? 'border-primary bg-primary/10 text-text-bright'
+                  : 'border-border text-text hover:bg-surface-2'}"
+                on:click={() => patchHud({ refreshMs: step })}
+              >
+                {(step / 1000).toLocaleString($locale ?? "en")} s
+              </button>
+            {/each}
+          </div>
+        </div>
+        <label class="flex flex-col gap-1.5">
+          <span class="text-[0.74rem] text-text-muted">{$_("settings.hud.cpuAlert")}</span>
+          <select
+            class="h-8 bg-surface-2 border border-border rounded px-2 text-[0.8rem] text-text-bright outline-none"
+            value={s.hud.cpuAlert}
+            on:change={(e) => patchHud({ cpuAlert: Number(e.currentTarget.value) })}
+          >
+            {#each alertSteps as step (step)}
+              <option value={step}>{alertLabel(step, s.tempUnit)}</option>
+            {/each}
+          </select>
+        </label>
+        <label class="flex flex-col gap-1.5">
+          <span class="text-[0.74rem] text-text-muted">{$_("settings.hud.gpuAlert")}</span>
+          <select
+            class="h-8 bg-surface-2 border border-border rounded px-2 text-[0.8rem] text-text-bright outline-none"
+            value={s.hud.gpuAlert}
+            on:change={(e) => patchHud({ gpuAlert: Number(e.currentTarget.value) })}
+          >
+            {#each alertSteps as step (step)}
+              <option value={step}>{alertLabel(step, s.tempUnit)}</option>
+            {/each}
+          </select>
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <section class="mb-6">
+    <h2 class="text-[0.95rem] font-semibold text-text-bright mb-1">{$_("settings.look.title")}</h2>
+    <p class="text-[0.78rem] text-text-muted mb-3">{$_("settings.look.hint")}</p>
+    <div class="border border-border rounded-lg px-3 py-3 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:gap-6">
+      <div class="flex flex-col gap-1.5">
+        <span class="text-[0.74rem] text-text-muted">{$_("settings.look.theme")}</span>
+        <div class="flex gap-1.5">
+          {#each themes as option (option.label)}
+            <button
+              class="px-3 h-8 rounded border text-[0.8rem] transition-colors {themeChoice === option.key
+                ? 'border-primary bg-primary/10 text-text-bright'
+                : 'border-border text-text hover:bg-surface-2'}"
+              on:click={() => chooseTheme(option.key)}
+            >
+              {$_(option.label)}
+            </button>
+          {/each}
+        </div>
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <span class="text-[0.74rem] text-text-muted">{$_("settings.look.unit")}</span>
+        <div class="flex gap-1.5">
+          {#each [{ key: "c", label: "°C" }, { key: "f", label: "°F" }] as unit (unit.key)}
+            <button
+              class="px-3 h-8 rounded border text-[0.8rem] transition-colors {s.tempUnit === unit.key
+                ? 'border-primary bg-primary/10 text-text-bright'
+                : 'border-border text-text hover:bg-surface-2'}"
+              on:click={() => chooseUnit(unit.key === "f" ? "f" : "c")}
+            >
+              {unit.label}
+            </button>
+          {/each}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mb-6">
+    <h2 class="text-[0.95rem] font-semibold text-text-bright mb-1">{$_("settings.data.title")}</h2>
+    <p class="text-[0.78rem] text-text-muted mb-3">{$_("settings.data.hint")}</p>
+    <div class="flex flex-wrap gap-2">
+      <button class="flex items-center gap-1.5 px-3 h-8 rounded border border-border text-[0.8rem] text-text hover:bg-surface-2" on:click={exportSettings}>
+        <Download size={14} />{$_("settings.data.export")}
+      </button>
+      <button class="flex items-center gap-1.5 px-3 h-8 rounded border border-border text-[0.8rem] text-text hover:bg-surface-2" on:click={importSettings}>
+        <Upload size={14} />{$_("settings.data.import")}
+      </button>
+      <button class="flex items-center gap-1.5 px-3 h-8 rounded border border-border text-[0.8rem] text-text hover:bg-surface-2" on:click={resetSettings}>
+        <RotateCcw size={14} />{$_("settings.data.reset")}
+      </button>
+      <button class="flex items-center gap-1.5 px-3 h-8 rounded border border-danger/50 text-[0.8rem] text-danger hover:bg-danger/10" on:click={clearHistory}>
+        <Trash2 size={14} />{$_("settings.data.history")}
+      </button>
     </div>
   </section>
 

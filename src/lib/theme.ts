@@ -43,6 +43,18 @@ export function initTheme(saved: ThemeName | null = null) {
   setInterval(readDesktopTheme, POLL_MS);
 }
 
+/** What the user chose: a fixed theme, or null to follow the desktop. */
+export function currentChoice(): ThemeName | null {
+  return choice;
+}
+
+/** Sets the choice from the settings: follow the desktop, light or dark. */
+export function setThemeChoice(next: ThemeName | null, save = true) {
+  choice = next;
+  apply();
+  if (save) void setSettings({ theme: choice }).catch(() => {});
+}
+
 /**
  * Switches between dark and light. Switching to the theme the desktop already
  * has goes back to following the desktop instead of saving a fixed choice.

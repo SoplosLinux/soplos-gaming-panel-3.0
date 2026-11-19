@@ -20,7 +20,15 @@ export type HudMetric =
   | "ram"
   | "fps"
   | "frametime"
-  | "net";
+  | "net"
+  | "disk"
+  | "fans"
+  | "voltage"
+  | "battery"
+  | "scheduler"
+  | "profile"
+  | "session"
+  | "clock";
 
 /** What the overlay draws. */
 export interface HudSettings {
@@ -33,6 +41,13 @@ export interface HudSettings {
   scale: number;
   /** The cells to draw, in the order of the list. Empty draws none. */
   metrics: HudMetric[];
+  /** Shown when a game starts and hidden when it ends. */
+  autoShow: boolean;
+  /** Milliseconds between two readings: 500, 1000 or 2000. */
+  refreshMs: number;
+  /** Degrees Celsius from which the figure turns red; 0 never. */
+  cpuAlert: number;
+  gpuAlert: number;
 }
 
 export interface Settings {
@@ -42,8 +57,19 @@ export interface Settings {
   panelHotkey: string;
   hudHotkey: string;
   startWithSession: boolean;
+  /** Started by the session, the panel stays in the tray. */
+  startMinimized: boolean;
+  /** Closing the window leaves the panel in the tray; off, it quits. */
+  closeToTray: boolean;
+  notifyGameMode: boolean;
+  tempUnit: "c" | "f";
   hud: HudSettings;
 }
+
+export const settingsExport = (path: string) => invoke<void>("settings_export", { path });
+export const settingsImport = (path: string) => invoke<Settings>("settings_import", { path });
+export const settingsReset = () => invoke<Settings>("settings_reset");
+export const historyClear = () => invoke<void>("history_clear");
 
 export const getSettings = () => invoke<Settings>("get_settings");
 /** Changes only the keys given; returns the settings as they stay saved. */
@@ -76,7 +102,14 @@ export interface Sensor {
   value: number;
 }
 
+export interface Battery {
+  percent: number;
+  /** On the mains: charging, full or held at a limit. */
+  plugged: boolean;
+}
+
 export interface Snapshot {
+  battery: Battery | null;
   cpu: number;
   cores: number[];
   cpuName: string;
@@ -160,7 +193,7 @@ export interface GovernorAuto {
 export interface GovernorSession {
   name: string;
   pid: number;
-  /** Seconds since it started. */
+  /** When it started, in seconds since 1970. */
   seconds: number;
   profile: string;
 }
@@ -288,6 +321,8 @@ export interface MangoHudSetting {
   max: number | null;
   /** The words the file takes, when it takes one of a few. */
   choices: string[];
+  /** What a ticked box writes: empty for an option that is only on or off. */
+  default: string;
 }
 
 export interface MangoHudState {
@@ -300,7 +335,7 @@ export interface MangoHudState {
   preset: string | null;
   /** The keys that can be offered, in the order of their groups. */
   settings: MangoHudSetting[];
-  /** The log MangoHud writes to, when the file names one. */
+  /** The folder MangoHud writes its logs to, when the file names one. */
   fpsLog: string | null;
 }
 

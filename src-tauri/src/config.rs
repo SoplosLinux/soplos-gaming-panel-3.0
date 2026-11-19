@@ -17,8 +17,16 @@ pub const CORNERS: [&str; 4] = ["top-left", "top-right", "bottom-left", "bottom-
 pub const HUD_MODES: [&str; 2] = ["simple", "advanced"];
 
 /// What the overlay can draw, in the order the settings show it.
-pub const HUD_METRICS: [&str; 11] =
-    ["cpu", "cpuTemp", "cpuWatts", "clocks", "gpu", "gpuTemp", "vram", "ram", "fps", "frametime", "net"];
+pub const HUD_METRICS: [&str; 19] = [
+    "cpu", "cpuTemp", "cpuWatts", "clocks", "gpu", "gpuTemp", "vram", "ram", "fps", "frametime", "net", "disk", "fans",
+    "voltage", "battery", "scheduler", "profile", "session", "clock",
+];
+
+/// How often the overlay and the monitor read the machine, in milliseconds.
+pub const REFRESH_STEPS: [u32; 3] = [500, 1000, 2000];
+
+/// The units the temperatures are shown in.
+pub const TEMP_UNITS: [&str; 2] = ["c", "f"];
 
 /// What the small overlay draws and where it sits.
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -36,6 +44,15 @@ pub struct Hud {
     /// none.
     #[serde(default)]
     pub metrics: Vec<String>,
+    /// Shows the overlay when a game starts and hides it when the game ends.
+    pub auto_show: bool,
+    /// Milliseconds between two readings, of `REFRESH_STEPS`.
+    pub refresh_ms: u32,
+    /// The temperature of the processor, in degrees Celsius, from which its
+    /// figure is drawn in the colour of danger. 0 never.
+    pub cpu_alert: u8,
+    /// The same for the graphic card.
+    pub gpu_alert: u8,
     // The five switches of the versions before the list. They are read only
     // to bring an old file forward, and never written again.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -107,6 +124,10 @@ impl Default for Hud {
             metrics: ["cpu", "cpuTemp", "gpu", "gpuTemp", "vram", "fps", "frametime"]
                 .map(str::to_string)
                 .to_vec(),
+            auto_show: false,
+            refresh_ms: 1000,
+            cpu_alert: 90,
+            gpu_alert: 85,
             show_cpu: None,
             show_gpu: None,
             show_ram: None,
@@ -126,6 +147,15 @@ pub struct Settings {
     pub panel_hotkey: String,
     pub hud_hotkey: String,
     pub start_with_session: bool,
+    /// When the session starts the panel, it stays in the tray instead of
+    /// opening its window.
+    pub start_minimized: bool,
+    /// Closing the window leaves the panel in the tray; off, it quits.
+    pub close_to_tray: bool,
+    /// A notification of the desktop when the game mode turns on or off.
+    pub notify_game_mode: bool,
+    /// `c` or `f`, of `TEMP_UNITS`.
+    pub temp_unit: String,
     pub hud: Hud,
 }
 
@@ -137,6 +167,10 @@ impl Default for Settings {
             panel_hotkey: "Ctrl+Shift+G".to_string(),
             hud_hotkey: "Ctrl+Shift+H".to_string(),
             start_with_session: false,
+            start_minimized: true,
+            close_to_tray: true,
+            notify_game_mode: false,
+            temp_unit: "c".to_string(),
             hud: Hud::default(),
         }
     }
@@ -168,11 +202,29 @@ impl Settings {
         if !HUD_MODES.contains(&self.hud.mode.as_str()) {
             self.hud.mode = Hud::default().mode;
         }
+        if !TEMP_UNITS.contains(&self.temp_unit.as_str()) {
+            self.temp_unit = Settings::default().temp_unit;
+        }
         self.hud = self.hud.brought_forward();
         self.hud.opacity = self.hud.opacity.clamp(20, 100);
         self.hud.scale = self.hud.scale.clamp(50, 200);
+        if !REFRESH_STEPS.contains(&self.hud.refresh_ms) {
+            self.hud.refresh_ms = Hud::default().refresh_ms;
+        }
+        // 0 is "never"; any other value is a temperature a chip can reach.
+        for alert in [&mut self.hud.cpu_alert, &mut self.hud.gpu_alert] {
+            if *alert != 0 {
+                *alert = (*alert).clamp(50, 110);
+            }
+        }
         self
     }
+}
+
+/// The settings of a file chosen by the user, kept inside what the program
+/// can draw with: what an import reads.
+pub fn from_text(text: &str) -> Result<Settings, String> {
+    serde_json::from_str::<Settings>(text).map(Settings::sanitized).map_err(|error| error.to_string())
 }
 
 pub fn config_dir() -> PathBuf {
@@ -278,5 +330,34 @@ mod tests {
     #[test]
     fn a_file_without_a_list_gets_the_default_cells() {
         assert_eq!(read("{}").metrics, Hud::default().metrics);
+    }
+
+    #[test]
+    fn the_new_cells_are_kept() {
+        let hud = read(r#"{"hud":{"metrics":["fans","battery","clock","session"]}}"#);
+        assert_eq!(hud.metrics, ["fans", "battery", "clock", "session"]);
+    }
+
+    #[test]
+    fn the_refresh_and_the_alerts_stay_inside_what_makes_sense() {
+        let hud = read(r#"{"hud":{"refreshMs":7,"cpuAlert":200,"gpuAlert":0}}"#);
+        assert_eq!(hud.refresh_ms, 1000);
+        assert_eq!(hud.cpu_alert, 110);
+        assert_eq!(hud.gpu_alert, 0);
+    }
+
+    #[test]
+    fn an_old_file_gets_the_new_settings_with_their_defaults() {
+        let settings = from_text(r#"{"panelHotkey":"Ctrl+Shift+G","tempUnit":"kelvin"}"#).unwrap();
+        assert!(settings.close_to_tray);
+        assert!(settings.start_minimized);
+        assert!(!settings.notify_game_mode);
+        assert_eq!(settings.temp_unit, "c");
+        assert_eq!(settings.hud.refresh_ms, 1000);
+    }
+
+    #[test]
+    fn a_file_that_is_not_settings_is_refused() {
+        assert!(from_text("not json").is_err());
     }
 }

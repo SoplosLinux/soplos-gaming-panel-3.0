@@ -113,6 +113,13 @@ pub fn governor_rule(
     )
 }
 
+/// Forgets the hours played. The history belongs to the daemon (it writes it
+/// as root when a game closes), so the daemon deletes it.
+#[tauri::command]
+pub fn history_clear() -> Result<(), String> {
+    send(&json!({ "op": "clear-history" }).to_string()).map(|_| ())
+}
+
 /// The schedulers of sched_ext as this machine has them. Reading it never
 /// asks for a password: it is the kernel and a service talking.
 #[tauri::command]
@@ -121,10 +128,23 @@ pub fn scx_status() -> crate::governor::scx::Scx {
 }
 
 /// Starts or swaps the scheduler of sched_ext, or lets go of it with no name.
+/// The daemon does it, as root, so the scheduler service asks for no password;
+/// only when the daemon cannot (not running, or not closed to this user yet)
+/// does the window ask the service itself, which asks for one.
 #[tauri::command]
 pub fn scx_set(scheduler: Option<String>, mode: u32) -> Result<(), String> {
-    match scheduler {
-        Some(name) => crate::governor::scx::switch(&name, mode),
-        None => crate::governor::scx::stop(),
+    if let Some(name) = &scheduler {
+        if !crate::governor::scx::valid_name(name) {
+            return Err(format!("Not a scheduler name: {name}"));
+        }
+    }
+    let request = json!({ "op": "scx", "scheduler": scheduler, "mode": mode }).to_string();
+    match send(&request) {
+        Ok(_) => Ok(()),
+        Err(error) if error.contains("not closed to one user") || error.contains("daemon.sock") => match scheduler {
+            Some(name) => crate::governor::scx::switch(&name, mode),
+            None => crate::governor::scx::stop(),
+        },
+        Err(error) => Err(error),
     }
 }

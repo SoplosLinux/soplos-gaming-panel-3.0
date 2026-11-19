@@ -2,6 +2,7 @@ import "./styles/global.css";
 import { initI18n } from "./i18n";
 import { initTheme } from "./lib/theme";
 import { getSettings, type Settings } from "./lib/api";
+import { setTempUnit } from "./lib/units";
 import Overlay from "./views/Overlay.svelte";
 
 // The overlay: a small surface of the program that stays over the game. It
@@ -19,6 +20,7 @@ async function start() {
     // Without the file of settings the overlay opens with the defaults.
   }
   initTheme(saved?.theme ?? null);
+  setTempUnit(saved?.tempUnit);
   await initI18n(saved?.language ?? null);
   new Overlay({ target: document.getElementById("app")! });
 }

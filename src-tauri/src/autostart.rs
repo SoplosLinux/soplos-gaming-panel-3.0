@@ -13,10 +13,14 @@ fn autostart_file() -> Option<PathBuf> {
         .map(|base| base.join("autostart").join("soplos-gaming-panel.desktop"))
 }
 
+/// What the session adds to the command, so the program knows it was not the
+/// user who opened it and can stay in the tray.
+pub const FLAG: &str = "--autostart";
+
 /// The program that is running: in a package it is the one in /usr/bin, which
 /// is also the one the session starts later.
 fn command() -> String {
-    crate::program_path()
+    format!("{} {FLAG}", crate::program_path())
 }
 
 pub fn is_enabled() -> bool {

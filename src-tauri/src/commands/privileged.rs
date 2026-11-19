@@ -3,7 +3,8 @@
 //
 // The window never runs as root and never sends a script. It writes a request
 // with named operations, and pkexec starts this same program again as
-// `--run-ops <file>` under the polkit action of the package. That second run
+// `--run-ops <file>` (installing, with password) or `--run-tweaks <file>` (the
+// rest, without) under the polkit action of each flag. That second run
 // never opens a window: it checks everything again as root, because the file
 // can be written by any user, and only then does the work.
 
@@ -63,7 +64,26 @@ fn command_error(result: std::process::Output) -> String {
     }
 }
 
-/// Asks pkexec to run the operations as root. One call is one password.
+/// Whether an operation asks for the password of the administrator. Only
+/// installing does: the tweaks, the sensor chips and the unit of the panel are
+/// a closed list of things the package itself ships, and the polkit action of
+/// `--run-tweaks` lets the user at the desk do them without a password.
+fn needs_password(op: &Op) -> bool {
+    matches!(op, Op::InstallPackages { .. })
+}
+
+/// The flag pkexec starts the program with, which is what picks the polkit
+/// action: `--run-ops` asks for the password, `--run-tweaks` does not.
+fn root_flag(ops: &[Op]) -> &'static str {
+    if ops.iter().any(needs_password) {
+        "--run-ops"
+    } else {
+        "--run-tweaks"
+    }
+}
+
+/// Asks pkexec to run the operations as root. One call is at most one
+/// password, and none when nothing is installed.
 pub fn run_as_root(ops: &[Op]) -> Result<(), String> {
     if ops.is_empty() {
         return Ok(());
@@ -85,7 +105,7 @@ pub fn run_as_root(ops: &[Op]) -> Result<(), String> {
     }
 
     let exe = crate::program_path();
-    let output = Command::new("pkexec").arg(&exe).arg("--run-ops").arg(&file).output();
+    let output = Command::new("pkexec").arg(&exe).arg(root_flag(ops)).arg(&file).output();
     let _ = fs::remove_file(&file);
 
     match output {
@@ -394,8 +414,10 @@ fn run_op(op: &Op) -> Result<(), String> {
 }
 
 /// Called from main() before Tauri starts when pkexec starts the program again.
+/// `with_password` says which polkit action let it in: the one without a
+/// password (`--run-tweaks`) never installs anything, whatever the file says.
 /// Returns the exit code.
-pub fn run_ops_file(path: &str) -> i32 {
+pub fn run_ops_file(path: &str, with_password: bool) -> i32 {
     let uid = match std::env::var("PKEXEC_UID").ok().and_then(|v| v.parse::<u32>().ok()) {
         Some(uid) => uid,
         None => {
@@ -413,6 +435,9 @@ pub fn run_ops_file(path: &str) -> i32 {
         }
         let request: Request =
             serde_json::from_str(&fs::read_to_string(&file).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        if !with_password && request.ops.iter().any(needs_password) {
+            return Err("Installing needs the administrator password".to_string());
+        }
         for op in &request.ops {
             run_op(op)?;
         }
@@ -433,6 +458,18 @@ mod tests {
 
     fn scratch(name: &str) -> crate::testing::Scratch {
         crate::testing::scratch("sgp-copias", name)
+    }
+
+    #[test]
+    fn only_installing_asks_for_the_password() {
+        let tweak = Op::Tweak { which: "sysctl".to_string(), on: true };
+        let install = Op::InstallPackages { apt: vec!["gamemode".to_string()], flatpak: Vec::new() };
+        assert_eq!(root_flag(&[tweak.clone()]), "--run-tweaks");
+        assert_eq!(root_flag(&[Op::Service { start: true }]), "--run-tweaks");
+        assert_eq!(root_flag(&[Op::Modules { names: Vec::new() }]), "--run-tweaks");
+        assert_eq!(root_flag(&[install.clone()]), "--run-ops");
+        // One install among tweaks takes the whole request to the password.
+        assert_eq!(root_flag(&[tweak, install]), "--run-ops");
     }
 
     #[test]

@@ -298,7 +298,7 @@ pub fn serve() -> i32 {
         }
         match stream {
             Ok(stream) => {
-                if let Err(error) = answer(stream) {
+                if let Err(error) = answer(stream, restricted) {
                     eprintln!("request: {error}");
                 }
             }
@@ -327,7 +327,11 @@ fn restrict_socket(path: &Path) -> bool {
 /// The longest request the window sends is a few hundred bytes.
 const REQUEST_LIMIT: u64 = 16 * 1024;
 
-fn answer(mut stream: UnixStream) -> std::io::Result<()> {
+/// `restricted` says whether only the user of the panel can reach the socket.
+/// Changing the scheduler of the machine is only done for that user: with the
+/// socket still open to everybody, the window asks the scheduler service
+/// itself, which asks for the password.
+fn answer(mut stream: UnixStream, restricted: bool) -> std::io::Result<()> {
     // One request at a time: a client that connects and says nothing must not
     // keep the daemon from answering the next one.
     stream.set_read_timeout(Some(std::time::Duration::from_secs(5)))?;
@@ -347,6 +351,12 @@ fn answer(mut stream: UnixStream) -> std::io::Result<()> {
         "exclude" => ok_or_error(set_exclusion(&request, true)),
         "include" => ok_or_error(set_exclusion(&request, false)),
         "restore" => ok_or_error(restore()),
+        "scx" if restricted => ok_or_error(set_scx(&request)),
+        "scx" => json!({ "ok": false, "error": "the daemon is not closed to one user yet" }),
+        "clear-history" if restricted => {
+            ok_or_error(history::clear(&config_dir()).map(|()| Value::Null).map_err(|error| error.to_string()))
+        }
+        "clear-history" => json!({ "ok": false, "error": "the daemon is not closed to one user yet" }),
         "status" => json!({ "ok": true, "result": status() }),
         other => json!({ "ok": false, "error": format!("unknown operation: {other}") }),
     };
@@ -404,6 +414,18 @@ pub fn preview() -> Value {
         all.insert(id.to_string(), Value::Object(changes));
     }
     Value::Object(all)
+}
+
+/// Starts, swaps or stops the scheduler of sched_ext for the window. The
+/// daemon is root, so the scheduler service lets it without a password; the
+/// name is checked by `scx::switch` before it reaches the service.
+fn set_scx(request: &Value) -> Result<Value, String> {
+    let mode = request["mode"].as_u64().and_then(|mode| u32::try_from(mode).ok()).unwrap_or(0);
+    match request["scheduler"].as_str() {
+        Some(name) => governor::scx::switch(name, mode)?,
+        None => governor::scx::stop()?,
+    }
+    Ok(Value::Null)
 }
 
 fn ok_or_error(outcome: Result<Value, String>) -> Value {

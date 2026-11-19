@@ -4,6 +4,7 @@
   import { _ } from "svelte-i18n";
   import { Activity, ArrowDownUp, Cpu, Fan, Gauge, HardDrive, Layers, ListOrdered, MemoryStick, PlugZap, Thermometer, Zap } from "lucide-svelte";
   import { getSettings, monitorSnapshot, setHudEnabled, askSensorModules, sensorModules, type Snapshot } from "../lib/api";
+  import { formatTemp, tempUnit, type TempUnit } from "../lib/units";
 
   // An hour of readings is kept, one per second; the graph shows the window
   // that is picked below it.
@@ -139,8 +140,9 @@
     return path ? `${path} L100 40 L0 40 Z` : "";
   }
 
-  function degrees(value: number | null | undefined): string {
-    return value === null || value === undefined ? "—" : `${Math.round(value)} °C`;
+  /** The unit is an argument so the figures are written again when it changes. */
+  function degrees(value: number | null | undefined, unit: TempUnit): string {
+    return formatTemp(value, unit);
   }
 
   function mhz(value: number | null | undefined): string {
@@ -285,13 +287,13 @@
   <div class="bg-surface border border-border rounded p-3.5 flex flex-col justify-between">
     <p class="text-[0.66rem] uppercase tracking-wide text-text-muted flex items-center gap-1.5"><Thermometer size={12} />{$_("monitor.temp")}</p>
     <div>
-      <p class="text-[1.35rem] font-semibold leading-none {hotTemp ? 'text-danger' : 'text-text-bright'}">{degrees(snapshot?.cpuTemp)}</p>
+      <p class="text-[1.35rem] font-semibold leading-none {hotTemp ? 'text-danger' : 'text-text-bright'}">{degrees(snapshot?.cpuTemp, $tempUnit)}</p>
       <div class="h-1.5 w-full bg-surface-2 rounded-full mt-2 overflow-hidden">
         <div class="h-full rounded-full {hotTemp ? 'bg-danger' : 'bg-primary'}" style={`width: ${fraction(snapshot?.cpuTemp)}%`}></div>
       </div>
     </div>
     <p class="text-[0.7rem] text-text-muted truncate">
-      {gpu?.temp != null ? `${degrees(gpu.temp)} ${$_("monitor.gpu")}` : $_("monitor.noSensor")}
+      {gpu?.temp != null ? `${degrees(gpu.temp, $tempUnit)} ${$_("monitor.gpu")}` : $_("monitor.noSensor")}
     </p>
   </div>
 </div>
@@ -459,7 +461,7 @@
                 <span class="text-text-bright truncate pr-3" title={`${sensor.chip} · ${sensor.label}`}>
                   {sensor.chip} · {sensor.label}
                 </span>
-                <span class="shrink-0 {sensor.value >= 85 ? 'text-danger' : 'text-text'}">{Math.round(sensor.value)} °C</span>
+                <span class="shrink-0 {sensor.value >= 85 ? 'text-danger' : 'text-text'}">{degrees(sensor.value, $tempUnit)}</span>
               </div>
               <div class="h-1 w-full bg-surface-2 rounded-full mt-1 overflow-hidden">
                 <div

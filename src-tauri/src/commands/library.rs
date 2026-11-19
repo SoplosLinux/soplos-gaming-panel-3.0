@@ -58,11 +58,12 @@ pub fn library_launch(id: String) -> Result<(), String> {
         return library::launch_lutris(lutris).map(|_| ()).map_err(|error| error.to_string());
     }
     let app_id = game.app_id.ok_or("the game has nothing to start")?;
-    // The client is what knows how to start a game of Steam, even when it is
-    // already running.
-    std::process::Command::new("steam")
-        .arg("-applaunch")
-        .arg(&app_id)
+    // The link of Steam, the one its own shortcuts use: the Steam installed
+    // answers it, from apt or Flatpak (there is no `steam` command on the
+    // host with the Flatpak), and it works with the client already running.
+    std::process::Command::new("gio")
+        .arg("open")
+        .arg(format!("steam://rungameid/{app_id}"))
         .spawn()
         .map(|_| ())
         .map_err(|error| error.to_string())

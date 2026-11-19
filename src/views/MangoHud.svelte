@@ -65,11 +65,11 @@
     busy = false;
   }
 
-  /** A box is a key with no value; taking the box away takes the key away. */
+  /** Ticking a box writes the key alone for an option that is only on or off,
+   * or the key with its default value; taking the box away takes the key away. */
   function toggle(setting: MangoHudSetting, on: boolean) {
     if (on) {
-      const first = setting.kind === "flag" ? "" : (setting.choices[0] ?? "");
-      void run(() => mangohudSet([[setting.key, first]]));
+      void run(() => mangohudSet([[setting.key, setting.default]]));
     } else {
       void run(() => mangohudRemove(setting.key));
     }

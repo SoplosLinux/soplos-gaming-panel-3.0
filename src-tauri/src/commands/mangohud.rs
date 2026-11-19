@@ -20,13 +20,13 @@ pub struct MangoHudState {
     pub preset: Option<String>,
     /// The keys the window can offer as boxes and fields.
     pub settings: &'static [Setting],
-    /// The log MangoHud writes to, when the file names one.
+    /// The folder MangoHud writes its logs to, when the file names one.
     pub fps_log: Option<String>,
 }
 
 fn state_of(path: &std::path::Path) -> MangoHudState {
     let document = mangohud::read(path).unwrap_or_default();
-    let fps_log = mangohud::log_path(&document).map(|log| log.display().to_string());
+    let fps_log = mangohud::log_folder(&document).map(|folder| folder.display().to_string());
     MangoHudState {
         path: path.display().to_string(),
         exists: path.exists(),
@@ -90,29 +90,38 @@ pub fn mangohud_text() -> Result<Value, String> {
     Ok(serde_json::json!({ "text": document.to_text() }))
 }
 
-/// Points MangoHud at a log inside the folder of the panel, which is what lets
-/// the panel read the frames per second while a game runs.
+/// Points MangoHud at a folder it can write in from every install, and makes
+/// it log from the start of each game, which is what lets the panel read the
+/// frames per second while a game runs.
 #[tauri::command]
 pub fn mangohud_fps_log() -> Result<MangoHudState, String> {
-    let log = mangohud::default_log_path().ok_or("no home folder for this user")?;
-    if let Some(folder) = log.parent() {
-        std::fs::create_dir_all(folder).map_err(|error| error.to_string())?;
-    }
+    let folder = mangohud::default_log_folder().ok_or("no home folder for this user")?;
+    std::fs::create_dir_all(&folder).map_err(|error| error.to_string())?;
     let path = mangohud::path().ok_or("no home folder for this user")?;
     let mut document = mangohud::read(&path).map_err(|error| error.to_string())?;
-    if !document.set("output_file", &log.display().to_string()) {
-        return Err("output_file refused the path".to_string());
+    // output_file is the old key, which MangoHud no longer reads.
+    document.remove("output_file");
+    if !document.set("output_folder", &folder.display().to_string()) {
+        return Err("output_folder refused the path".to_string());
     }
+    // Start logging one second after the game opens, with no time limit. The
+    // interval must not be 0: with 0 MangoHud keeps no logging thread and
+    // nothing reaches the file while the game runs.
+    document.set("autostart_log", "1");
+    document.set("log_duration", "0");
+    document.set("log_interval", "500");
     mangohud::write(&path, &document).map_err(|error| error.to_string())?;
     Ok(state_of(&path))
 }
 
-/// Stops MangoHud from writing the log, taking only that key away.
+/// Stops MangoHud from writing the log, taking only those keys away.
 #[tauri::command]
 pub fn mangohud_fps_log_off() -> Result<MangoHudState, String> {
     let path = mangohud::path().ok_or("no home folder for this user")?;
     let mut document = mangohud::read(&path).map_err(|error| error.to_string())?;
-    document.remove("output_file");
+    for key in ["output_file", "output_folder", "autostart_log", "log_duration", "log_interval"] {
+        document.remove(key);
+    }
     mangohud::write(&path, &document).map_err(|error| error.to_string())?;
     Ok(state_of(&path))
 }

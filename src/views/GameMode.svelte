@@ -68,6 +68,58 @@
   let ryzenadj = false;
   let kernels: KernelInfo[] = [];
   let scx: ScxState = { kernel: false, service: false, current: "unknown", mode: 0, supported: [] };
+  let showSchedulerHelp = false;
+
+  /** What the README of each scheduler says it is for, in a few words: the
+   * schedulers of scx 1.1.4 that scx-scheds ships. */
+  const SCHEDULER_HELP = new Set([
+    "scx_beerland",
+    "scx_bpfland",
+    "scx_cake",
+    "scx_chaos",
+    "scx_cosmos",
+    "scx_eevdf",
+    "scx_flash",
+    "scx_flow",
+    "scx_forge",
+    "scx_lavd",
+    "scx_layered",
+    "scx_mavd",
+    "scx_mitosis",
+    "scx_mlfq",
+    "scx_nitosis",
+    "scx_p2dq",
+    "scx_pandemonium",
+    "scx_rlfifo",
+    "scx_rustland",
+    "scx_rusty",
+    "scx_tickless",
+  ]);
+
+  /** A mark next to the name: made with games in mind, still experimental, or
+   * only for testing. The rest are general schedulers. */
+  const SCHEDULER_TAGS: Record<string, "gaming" | "experimental" | "testing"> = {
+    scx_bpfland: "gaming",
+    scx_cake: "gaming",
+    scx_lavd: "gaming",
+    scx_rustland: "gaming",
+    scx_eevdf: "experimental",
+    scx_flow: "experimental",
+    scx_mavd: "experimental",
+    scx_mlfq: "experimental",
+    scx_nitosis: "experimental",
+    scx_chaos: "testing",
+    scx_rlfifo: "testing",
+  };
+  const TAG_TINTS: Record<string, string> = {
+    gaming: "bg-success/15 text-success",
+    experimental: "bg-warning/15 text-warning",
+    testing: "bg-danger/15 text-danger",
+  };
+
+  function aboutScheduler(name: string): string {
+    return SCHEDULER_HELP.has(name) ? $_(`scx.about.${name}`) : $_("scx.aboutUnknown");
+  }
   const scxModes = ["auto", "gaming", "powersave", "lowlatency", "server"];
   let error = "";
   // An error of something the user did stays until the next thing they do;
@@ -700,6 +752,41 @@
         </div>
       </label>
     </div>
+
+    <p class="text-[0.76rem] text-text-muted mt-2.5 leading-snug">
+      {scx.current === "unknown" ? $_("scx.aboutNone") : aboutScheduler(scx.current)}
+    </p>
+
+    <!-- What each one is for, as its own authors describe it, so the choice
+         is not a list of names. -->
+    <button
+      class="flex items-center gap-1.5 mt-3 text-[0.78rem] text-primary hover:underline"
+      on:click={() => (showSchedulerHelp = !showSchedulerHelp)}
+      aria-expanded={showSchedulerHelp}
+    >
+      <ChevronDown size={14} class="transition-transform {showSchedulerHelp ? '' : '-rotate-90'}" />
+      {$_("scx.help")}
+    </button>
+    {#if showSchedulerHelp}
+      <ul class="mt-2 flex flex-col divide-y divide-border border border-border rounded">
+        {#each scx.supported as name (name)}
+          <li class="px-3 py-2">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-[0.8rem] text-text-bright font-medium">{name}</span>
+              {#if SCHEDULER_TAGS[name]}
+                <span class="text-[0.64rem] uppercase tracking-wide rounded px-1.5 py-0.5 {TAG_TINTS[SCHEDULER_TAGS[name]]}">
+                  {$_(`scx.tags.${SCHEDULER_TAGS[name]}`)}
+                </span>
+              {/if}
+              {#if name === scx.current}
+                <span class="text-[0.64rem] uppercase tracking-wide rounded px-1.5 py-0.5 bg-primary/15 text-primary">{$_("scx.running")}</span>
+              {/if}
+            </div>
+            <p class="text-[0.74rem] text-text-muted mt-0.5 leading-snug">{aboutScheduler(name)}</p>
+          </li>
+        {/each}
+      </ul>
+    {/if}
   {/if}
 </div>
 

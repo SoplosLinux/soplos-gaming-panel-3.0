@@ -43,9 +43,19 @@ pub struct Process {
     pub ram_mb: u64,
 }
 
+/// The battery of a laptop: its charge and whether it is on the mains.
+#[derive(Serialize, Clone, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Battery {
+    pub percent: f32,
+    /// On the mains: charging, full or held at a limit. Off it, discharging.
+    pub plugged: bool,
+}
+
 #[derive(Serialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
+    pub battery: Option<Battery>,
     pub cpu: f32,
     pub cores: Vec<f32>,
     pub cpu_name: String,
@@ -576,15 +586,37 @@ fn read_processes(previous: &mut ProcessTimes, elapsed: f32) -> Vec<Process> {
     found
 }
 
+/// The first battery of the machine, as the kernel reports it. Desktops have
+/// none, and a mouse or a pad with a battery is not of the system.
+fn read_battery() -> Option<Battery> {
+    battery_in(Path::new("/sys/class/power_supply"))
+}
+
+fn battery_in(root: &Path) -> Option<Battery> {
+    let mut supplies: Vec<PathBuf> = fs::read_dir(root).ok()?.flatten().map(|entry| entry.path()).collect();
+    supplies.sort();
+    supplies.into_iter().find_map(|supply| {
+        let kind = fs::read_to_string(supply.join("type")).ok()?;
+        let scope = fs::read_to_string(supply.join("scope")).unwrap_or_default();
+        if kind.trim() != "Battery" || scope.trim() == "Device" {
+            return None;
+        }
+        let percent: f32 = read_number(&supply.join("capacity"))?;
+        let status = fs::read_to_string(supply.join("status")).unwrap_or_default();
+        Some(Battery { percent, plugged: status.trim() != "Discharging" })
+    })
+}
+
 /// Frames per second written by MangoHud in its log, when the user asked for
-/// one in its configuration (`output_file`).
+/// one in its configuration (`output_folder`): the newest file of the folder,
+/// as long as a game is still writing it.
 fn mangohud_fps() -> Option<f32> {
     // The configuration is read every time: the log can be turned on from the
     // page of MangoHud while the program runs.
     let path = crate::mangohud::path()?;
     let document = crate::mangohud::read(&path).ok()?;
-    let log = crate::mangohud::log_path(&document)?;
-    fps_in_log(&log)
+    let folder = crate::mangohud::log_folder(&document)?;
+    fps_in_log(&crate::mangohud::live_log(&folder)?)
 }
 
 /// The last frames per second of a log of MangoHud. The log grows during the
@@ -686,6 +718,7 @@ impl Sampler {
         let swap_free = meminfo_kb("SwapFree:");
 
         Snapshot {
+            battery: read_battery(),
             cpu,
             cores: core_usage,
             cpu_name: model.name.clone(),
@@ -715,14 +748,16 @@ impl Sampler {
     }
 }
 
-/// Reads the machine once a second and hands every reading to the window. The
-/// thread lives as long as the program does.
+/// Reads the machine as often as the settings say (once a second unless the
+/// user chose otherwise) and hands every reading to the window. The thread
+/// lives as long as the program does.
 pub fn start(app: AppHandle) {
     std::thread::spawn(move || {
         let mut sampler = Sampler::new();
         let mut was_watched = true;
         loop {
-            std::thread::sleep(Duration::from_millis(1000));
+            let every = u64::from(crate::config::load().hud.refresh_ms);
+            std::thread::sleep(Duration::from_millis(every));
             // Nobody to show it to: the window and the overlay are hidden. The
             // program lives in the tray for hours, many of them during a game,
             // and a reading walks /proc, the sensors and nvidia-smi, which also
@@ -774,5 +809,27 @@ mod tests {
         fs::write(&log, "fps,frametime\n").unwrap();
         assert_eq!(fps_in_log(&log), None);
         assert_eq!(fps_in_log(&dir.join("missing.csv")), None);
+    }
+
+    #[test]
+    fn the_battery_is_the_one_of_the_system_not_the_one_of_a_mouse() {
+        let dir = crate::testing::scratch("sgp-monitor", "battery");
+        let supply = |name: &str, kind: &str, scope: Option<&str>, capacity: &str, status: &str| {
+            let folder = dir.join(name);
+            fs::create_dir_all(&folder).unwrap();
+            fs::write(folder.join("type"), format!("{kind}\n")).unwrap();
+            if let Some(scope) = scope {
+                fs::write(folder.join("scope"), format!("{scope}\n")).unwrap();
+            }
+            fs::write(folder.join("capacity"), format!("{capacity}\n")).unwrap();
+            fs::write(folder.join("status"), format!("{status}\n")).unwrap();
+        };
+        supply("AC", "Mains", None, "0", "Unknown");
+        supply("hidpp_battery_0", "Battery", Some("Device"), "40", "Discharging");
+        assert_eq!(battery_in(&dir), None);
+        supply("BAT0", "Battery", None, "76", "Discharging");
+        assert_eq!(battery_in(&dir), Some(Battery { percent: 76.0, plugged: false }));
+        supply("BAT0", "Battery", None, "80", "Not charging");
+        assert_eq!(battery_in(&dir), Some(Battery { percent: 80.0, plugged: true }));
     }
 }

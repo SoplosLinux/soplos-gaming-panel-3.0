@@ -1,9 +1,33 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { _ } from "svelte-i18n";
-  import { Activity, ArrowDownUp, Cpu, Gauge, HardDrive, MemoryStick, Monitor, Scale, SlidersHorizontal, Snowflake, Thermometer, Timer, Zap } from "lucide-svelte";
+  import {
+    Activity,
+    ArrowDownUp,
+    BatteryCharging,
+    BatteryMedium,
+    Clock,
+    Cpu,
+    Fan,
+    Gamepad2,
+    Gauge,
+    HardDrive,
+    Layers,
+    MemoryStick,
+    Monitor,
+    PlugZap,
+    Scale,
+    SlidersHorizontal,
+    Snowflake,
+    Thermometer,
+    Timer,
+    Zap,
+  } from "lucide-svelte";
+  import { formatTemp, setTempUnit, tempUnit, type TempUnit } from "../lib/units";
   import {
     getSettings,
+    scxStatus,
+    type ScxState,
     governorApply,
     governorAuto,
     governorRestore,
@@ -28,6 +52,9 @@
   let service: ServiceState | null = null;
   let tweaks: TweakState[] = [];
   let hud: HudSettings | null = null;
+  let scx: ScxState | null = null;
+  /** Now, in seconds, for the clock and the time played. */
+  let now = Date.now();
   let busy = false;
   let timer: ReturnType<typeof setInterval> | undefined;
 
@@ -69,7 +96,14 @@
     bar: number | null;
     icon: typeof Zap;
     tint: string;
+    /** Past the temperature the user set: drawn in the colour of danger. */
+    hot: boolean;
   };
+
+  /** Whether a temperature has reached the alert; 0 is "never". */
+  function over(celsius: number | null | undefined, alert: number | undefined): boolean {
+    return celsius != null && !!alert && celsius >= alert;
+  }
 
   const tints: Record<string, string> = {
     cpu: "bg-primary/20 text-primary",
@@ -83,6 +117,14 @@
     fps: "bg-success/20 text-success",
     frametime: "bg-success/20 text-success",
     net: "bg-primary/20 text-primary",
+    disk: "bg-secondary/20 text-secondary",
+    fans: "bg-accent/20 text-accent",
+    voltage: "bg-warning/20 text-warning",
+    battery: "bg-success/20 text-success",
+    scheduler: "bg-primary/20 text-primary",
+    profile: "bg-primary/20 text-primary",
+    session: "bg-success/20 text-success",
+    clock: "bg-secondary/20 text-secondary",
   };
 
   const icons: Record<string, typeof Zap> = {
@@ -97,26 +139,81 @@
     fps: Activity,
     frametime: Timer,
     net: ArrowDownUp,
+    disk: HardDrive,
+    fans: Fan,
+    voltage: PlugZap,
+    battery: BatteryMedium,
+    scheduler: Layers,
+    profile: Zap,
+    session: Gamepad2,
+    clock: Clock,
   };
 
   /** One card per reading the user asked for. The readings come in as
    * arguments so that the card is redrawn with every tick. */
-  function cellOf(key: string, snap: Snapshot | null, card: Gpu | null): Cell | null {
-    const icon = icons[key];
+  function cellOf(
+    key: string,
+    snap: Snapshot | null,
+    card: Gpu | null,
+    unit: TempUnit,
+    settings: HudSettings | null,
+    machine: { scx: ScxState | null; status: GovernorStatus | null; now: number },
+  ): Cell | null {
+    let icon = icons[key];
     if (!icon) return null;
-    const cell = (value: string, sub: string | null = null, bar: number | null = null): Cell => ({
+    const cell = (value: string, sub: string | null = null, bar: number | null = null, hot = false): Cell => ({
       key,
       value,
       sub,
       bar,
       icon,
-      tint: tints[key],
+      tint: hot ? "bg-danger/20 text-danger" : tints[key],
+      hot,
     });
     switch (key) {
       case "cpu":
         return cell(percent(snap?.cpu), null, snap ? Math.min(100, Math.round(snap.cpu)) : null);
       case "cpuTemp":
-        return cell(temperature(snap?.cpuTemp));
+        return cell(formatTemp(snap?.cpuTemp, unit), null, null, over(snap?.cpuTemp, settings?.cpuAlert));
+      case "disk":
+        return cell(`R ${speed(snap?.diskReadKbps)}`, `W ${speed(snap?.diskWriteKbps)}`);
+      case "fans": {
+        const fans = snap?.fans ?? [];
+        if (fans.length === 0) return cell("—");
+        const fastest = Math.max(...fans.map((fan) => fan.value));
+        return cell(`${Math.round(fastest)} RPM`, fans.length > 1 ? `${fans.length} ${$_("settings.hud.fansCount")}` : fans[0].label);
+      }
+      case "voltage": {
+        const first = snap?.voltages?.[0];
+        return first ? cell(`${first.value.toFixed(2)} V`, first.label) : cell("—");
+      }
+      case "battery": {
+        const battery = snap?.battery;
+        if (!battery) return cell("—");
+        if (battery.plugged) icon = BatteryCharging;
+        return {
+          ...cell(
+            `${Math.round(battery.percent)} %`,
+            battery.plugged ? $_("settings.hud.plugged") : null,
+            Math.min(100, Math.round(battery.percent)),
+            !battery.plugged && battery.percent <= 15,
+          ),
+          icon,
+        };
+      }
+      case "scheduler":
+        return cell(
+          machine.scx && machine.scx.current !== "unknown" ? machine.scx.current.replace(/^scx_/, "") : $_("settings.hud.kernelScheduler"),
+          snap?.governor ?? null,
+        );
+      case "profile":
+        return cell(machine.status?.active && machine.status.profile ? $_(`profile.${machine.status.profile}`) : $_("gamemode.idle"));
+      case "session": {
+        const session = machine.status?.session;
+        return session ? cell(played(machine.now / 1000 - session.seconds), session.name) : cell("—");
+      }
+      case "clock":
+        return cell(new Date(machine.now).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
       case "cpuWatts":
         return cell(watts(snap?.cpuWatts));
       case "clocks":
@@ -124,7 +221,7 @@
       case "gpu":
         return cell(percent(card?.usage), null, card?.usage == null ? null : Math.min(100, Math.round(card.usage)));
       case "gpuTemp":
-        return cell(temperature(card?.temp));
+        return cell(formatTemp(card?.temp, unit), null, null, over(card?.temp, settings?.gpuAlert));
       case "vram":
         return card?.memTotalMb
           ? cell(`${card.memUsedMb ?? 0} MB`, `${card.memTotalMb} MB`)
@@ -145,8 +242,16 @@
   }
 
   $: cells = (hud?.metrics ?? [])
-    .map((key) => cellOf(key, snapshot, gpu))
+    .map((key) => cellOf(key, snapshot, gpu, $tempUnit, hud, { scx, status, now }))
     .filter((cell): cell is Cell => cell != null);
+
+  /** Hours and minutes, or minutes and seconds in the first hour. */
+  function played(seconds: number): string {
+    const total = Math.max(0, Math.round(seconds));
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    return hours > 0 ? `${hours} h ${String(minutes).padStart(2, "0")} min` : `${minutes} min ${String(total % 60).padStart(2, "0")} s`;
+  }
 
   function memoryBar(used: number, total: number): number | null {
     if (total <= 0) return null;
@@ -160,10 +265,6 @@
   function memory(used: number, total: number): string {
     if (total <= 0) return "—";
     return `${Math.round((used / total) * 100)} %`;
-  }
-
-  function temperature(value: number | null | undefined): string {
-    return value == null ? "—" : `${Math.round(value)} °C`;
   }
 
   function frames(value: number | null | undefined): string {
@@ -188,8 +289,9 @@
     return kbps >= 1024 ? `${(kbps / 1024).toFixed(1)} MB/s` : `${Math.round(kbps)} KB/s`;
   }
 
-  /** The readings of the machine, once a second. */
+  /** The readings of the machine, as often as the settings say. */
   async function readMachine() {
+    now = Date.now();
     try {
       snapshot = await monitorSnapshot();
     } catch {
@@ -197,18 +299,26 @@
     }
   }
 
-  // The rest changes only when somebody does something: it is read every few
+  // The rest changes only when somebody does something: it is read every five
   // seconds, and at once after a tap of the overlay. Asking the daemon for its
   // state makes it look at every game entry and every process, which is not
-  // something to do once a second while a game runs.
-  let tick = 0;
-  async function everySecond() {
-    tick += 1;
-    if (tick % 5 === 0) await refresh();
+  // something to do on every reading while a game runs.
+  let lastRefresh = 0;
+  async function everyTick() {
+    if (Date.now() - lastRefresh >= 5000) await refresh();
     else await readMachine();
   }
 
+  /** The interval follows the setting: it is set again when it changes. */
+  let every = 0;
+  $: if (hud && hud.refreshMs !== every) {
+    every = hud.refreshMs;
+    clearInterval(timer);
+    timer = setInterval(everyTick, every);
+  }
+
   async function refresh() {
+    lastRefresh = Date.now();
     await readMachine();
     try {
       status = await governorStatus();
@@ -216,9 +326,18 @@
       status = null;
     }
     try {
-      hud = (await getSettings()).hud;
+      const settings = await getSettings();
+      hud = settings.hud;
+      setTempUnit(settings.tempUnit);
     } catch {
       // Without the file the overlay keeps the last settings it read.
+    }
+    if (hud?.metrics.includes("scheduler")) {
+      try {
+        scx = await scxStatus();
+      } catch {
+        scx = null;
+      }
     }
     try {
       tweaks = await tweaksStatus();
@@ -276,8 +395,10 @@
   }
 
   onMount(() => {
-    refresh();
-    timer = setInterval(everySecond, 1000);
+    void refresh();
+    // Until the settings arrive, once a second; then what they say.
+    every = 1000;
+    timer = setInterval(everyTick, every);
   });
 
   // The root font size is what the whole card is measured against, so raising
@@ -357,7 +478,7 @@
                 </span>
                 <span class="text-[0.62rem] uppercase tracking-wide text-text-muted truncate">{$_(`settings.hud.metrics.${cell.key}`)}</span>
               </div>
-              <p class="text-[1.25rem] font-semibold text-text-bright leading-tight mt-1 tabular-nums truncate">
+              <p class="text-[1.25rem] font-semibold leading-tight mt-1 tabular-nums truncate {cell.hot ? 'text-danger' : 'text-text-bright'}">
                 {cell.value}
               </p>
               {#if cell.sub}
@@ -453,7 +574,7 @@
             </span>
             <span class="text-[0.58rem] uppercase tracking-wide text-text-muted truncate">{$_(`settings.hud.metrics.${cell.key}`)}</span>
           </div>
-          <p class="text-[1.05rem] font-semibold text-text-bright leading-tight mt-0.5 tabular-nums truncate">
+          <p class="text-[1.05rem] font-semibold leading-tight mt-0.5 tabular-nums truncate {cell.hot ? 'text-danger' : 'text-text-bright'}">
             {cell.value}
           </p>
           {#if cell.sub}

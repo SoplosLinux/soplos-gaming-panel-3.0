@@ -121,8 +121,12 @@ fn menu_game(path: &Path) -> Option<Game> {
         return None;
     }
     let name = name.filter(|value| !value.is_empty())?;
-    // The panel and the clients of the stores say Game in their entries too.
+    // The panel and the clients of the stores say Game in their entries too,
+    // and so do the shortcuts Lutris and Heroic write for a store client.
     let program = crate::governor::games::exec_program(&command?).filter(|name| !crate::governor::games::is_launcher(name))?;
+    if is_store_client(&program, &name) {
+        return None;
+    }
     Some(Game {
         id: format!("menu:{}", path.display()),
         name,
@@ -214,7 +218,7 @@ fn steam_game(root: &Path, manifest: &Path) -> Option<Game> {
     let name = acf_value(&text, "name")?;
     // Steam writes 4 in the state of a game that is fully installed.
     let state: u64 = acf_value(&text, "StateFlags").and_then(|value| value.parse().ok()).unwrap_or(4);
-    if state & 4 == 0 {
+    if state & 4 == 0 || is_steam_tool(&app_id, &name) {
         return None;
     }
     Some(Game {
@@ -230,6 +234,15 @@ fn steam_game(root: &Path, manifest: &Path) -> Option<Game> {
         picture: steam_picture(root, &app_id),
         lutris: None,
     })
+}
+
+/// What Steam installs to run the games and is not one: Proton, the Steam
+/// Linux Runtime and the common redistributables.
+fn is_steam_tool(app_id: &str, name: &str) -> bool {
+    app_id == "228980"
+        || name.starts_with("Proton")
+        || name.starts_with("Steam Linux Runtime")
+        || name.starts_with("Steamworks Common")
 }
 
 /// The value of a key of a manifest of Steam, which is written with the key
@@ -298,50 +311,84 @@ pub(crate) fn steam_folders(root: &Path) -> Vec<PathBuf> {
 
 // ── Lutris ──────────────────────────────────────────────────────────────────
 
-/// The Lutris of this user: the one of the system, the Flatpak one, or both.
-fn lutris_installs() -> Vec<bool> {
-    let mut found = Vec::new();
-    let on_path = std::env::var_os("PATH")
-        .map(|path| std::env::split_paths(&path).any(|dir| dir.join("lutris").is_file()))
-        .unwrap_or(false);
-    if on_path {
-        found.push(false);
-    }
-    let home = std::env::var("HOME").unwrap_or_default();
-    let flatpak = [
-        PathBuf::from("/var/lib/flatpak/app/net.lutris.Lutris"),
-        Path::new(&home).join(".local/share/flatpak/app/net.lutris.Lutris"),
-    ];
-    if flatpak.iter().any(|dir| dir.is_dir()) {
-        found.push(true);
-    }
-    found
+/// The databases of the Lutris of this user: the one of the system, the
+/// Flatpak one, or both, each with whether it is the Flatpak one.
+///
+/// The database is read instead of asking `lutris -l`: Lutris is a single
+/// instance application, and when its window is open the question goes to
+/// that window and the list never comes back.
+fn lutris_databases() -> Vec<(PathBuf, bool)> {
+    let Some(home) = std::env::var("HOME").ok().filter(|value| !value.is_empty()) else { return Vec::new() };
+    let home = Path::new(&home);
+    let data = std::env::var("XDG_DATA_HOME")
+        .ok()
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home.join(".local/share"));
+    [(data.join("lutris/pga.db"), false), (home.join(".var/app/net.lutris.Lutris/data/lutris/pga.db"), true)]
+        .into_iter()
+        .filter(|(path, _)| path.is_file())
+        .collect()
 }
 
-fn lutris_command(flatpak: bool) -> std::process::Command {
-    if flatpak {
-        let mut command = std::process::Command::new("flatpak");
-        command.args(["run", "--command=lutris", "net.lutris.Lutris"]);
-        command
-    } else {
-        std::process::Command::new("lutris")
-    }
-}
-
-/// The installed games, as Lutris itself lists them (`-l -o -j`): a JSON list
-/// of objects with the slug and the name. Lutris writes its log to the error
-/// output, and the list starts at the first bracket of the normal one.
-fn lutris_games(text: &str) -> Vec<(String, String)> {
-    let Some(start) = text.find('[') else { return Vec::new() };
-    let Ok(serde_json::Value::Array(items)) = serde_json::from_str::<serde_json::Value>(&text[start..]) else { return Vec::new() };
-    items
-        .iter()
-        .filter_map(|item| {
-            let slug = item.get("slug")?.as_str()?.trim().to_string();
-            let name = item.get("name")?.as_str()?.trim().to_string();
-            (!slug.is_empty() && !name.is_empty()).then_some((slug, name))
+/// The installed games of one database of Lutris: slug and name. The ones the
+/// user hid in Lutris are left out.
+fn lutris_games(database: &Path) -> Vec<(String, String)> {
+    use rusqlite::{Connection, OpenFlags};
+    // Read only, and without waiting: Lutris may have it open.
+    let Ok(connection) = Connection::open_with_flags(database, OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX) else {
+        return Vec::new();
+    };
+    let hidden: Vec<i64> = connection
+        .prepare(
+            "SELECT game_id FROM games_categories JOIN categories ON categories.id = games_categories.category_id \
+             WHERE categories.name = '.hidden'",
+        )
+        .and_then(|mut statement| statement.query_map([], |row| row.get(0))?.collect())
+        .unwrap_or_default();
+    let Ok(mut statement) = connection.prepare("SELECT id, slug, name FROM games WHERE installed = 1") else { return Vec::new() };
+    let Ok(rows) = statement.query_map([], |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, Option<String>>(1)?, row.get::<_, Option<String>>(2)?))
+    }) else {
+        return Vec::new();
+    };
+    rows.flatten()
+        .filter(|(id, _, _)| !hidden.contains(id))
+        .filter_map(|(_, slug, name)| {
+            let slug = slug?.trim().to_string();
+            let name = name?.trim().to_string();
+            (!slug.is_empty() && !name.is_empty() && !is_store_client(&slug, &name)).then_some((slug, name))
         })
         .collect()
+}
+
+/// The clients of other stores, which Lutris installs as if they were games:
+/// they open a store, not a game.
+const STORE_CLIENTS: [&str; 13] = [
+    "battlenet",
+    "battle.net",
+    "blizzard",
+    "epic games",
+    "epic-games",
+    "ea app",
+    "ea-app",
+    "ubisoft connect",
+    "ubisoft-connect",
+    "uplay",
+    "gog galaxy",
+    "gog-galaxy",
+    "amazon games",
+];
+
+fn is_store_client(slug: &str, name: &str) -> bool {
+    let name = name.to_lowercase();
+    let slug = slug.to_lowercase();
+    STORE_CLIENTS.iter().any(|client| slug.starts_with(client) || name.starts_with(client))
+        // "Origin" alone: a game may start with the word.
+        || slug == "origin"
+        || name == "origin"
+        || name.contains("launcher")
+        || slug.contains("launcher")
 }
 
 /// The cover Lutris downloaded for a game, when it did.
@@ -367,9 +414,8 @@ fn lutris_picture(slug: &str, flatpak: bool) -> Option<PathBuf> {
 
 fn from_lutris(already: Vec<String>) -> Vec<Game> {
     let mut games: Vec<Game> = Vec::new();
-    for flatpak in lutris_installs() {
-        let Ok(answer) = lutris_command(flatpak).args(["-l", "-o", "-j"]).output() else { continue };
-        for (slug, name) in lutris_games(&String::from_utf8_lossy(&answer.stdout)) {
+    for (database, flatpak) in lutris_databases() {
+        for (slug, name) in lutris_games(&database) {
             // A game that the menu or Steam already list keeps that entry.
             if already.contains(&name.to_lowercase()) || games.iter().any(|one| one.id == format!("lutris:{slug}")) {
                 continue;
@@ -490,12 +536,45 @@ pub fn data_url(path: &Path) -> Option<String> {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn the_games_of_lutris_are_read_from_its_list() {
-        // Lutris can write a line of its own before the list.
-        let text = "INFO lutris starting\n[{\"id\": 3, \"slug\": \"diablo-ii\", \"name\": \"Diablo II\", \"runner\": \"wine\"}, {\"id\": 4, \"slug\": \"\", \"name\": \"Nothing\"}]";
-        assert_eq!(lutris_games(text), vec![("diablo-ii".to_string(), "Diablo II".to_string())]);
-        assert!(lutris_games("no games").is_empty());
-        assert!(lutris_games("[]").is_empty());
+    fn the_games_of_lutris_are_read_from_its_database() {
+        let dir = scratch("sgp-library", "lutris");
+        let database = dir.join("pga.db");
+        let connection = rusqlite::Connection::open(&database).unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE games (id INTEGER PRIMARY KEY, name TEXT, slug TEXT, runner TEXT, installed INTEGER);
+                 CREATE TABLE categories (id INTEGER PRIMARY KEY, name TEXT);
+                 CREATE TABLE games_categories (game_id INTEGER, category_id INTEGER);
+                 INSERT INTO games VALUES (1, 'Crisis Core', 'crisis-core', 'ppsspp', 1);
+                 INSERT INTO games VALUES (2, 'Battle.net', 'battlenet', 'wine', 1);
+                 INSERT INTO games VALUES (3, 'Not here', 'not-here', 'wine', 0);
+                 INSERT INTO games VALUES (4, 'Hidden one', 'hidden-one', 'ppsspp', 1);
+                 INSERT INTO games VALUES (5, 'Epic Games Store', 'epic-games-store', 'wine', 1);
+                 INSERT INTO categories VALUES (1, '.hidden');
+                 INSERT INTO games_categories VALUES (4, 1);",
+            )
+            .unwrap();
+        drop(connection);
+        assert_eq!(lutris_games(&database), vec![("crisis-core".to_string(), "Crisis Core".to_string())]);
+        assert!(lutris_games(&dir.join("missing.db")).is_empty());
+    }
+
+    #[test]
+    fn the_clients_of_the_stores_are_not_games() {
+        assert!(is_store_client("battlenet", "Battle.net"));
+        assert!(is_store_client("epic-games-store", "Epic Games Store"));
+        assert!(is_store_client("ubisoft-connect", "Ubisoft Connect"));
+        assert!(is_store_client("rockstar-games-launcher", "Rockstar Games Launcher"));
+        assert!(!is_store_client("origin-of-the-species", "Origin of the Species"));
+        assert!(!is_store_client("diablo-ii", "Diablo II"));
+    }
+
+    #[test]
+    fn the_tools_of_steam_are_not_games() {
+        assert!(is_steam_tool("1493710", "Proton Experimental"));
+        assert!(is_steam_tool("1628350", "Steam Linux Runtime 3.0 (sniper)"));
+        assert!(is_steam_tool("228980", "Steamworks Common Redistributables"));
+        assert!(!is_steam_tool("292030", "The Witcher 3: Wild Hunt"));
     }
 
     use super::*;

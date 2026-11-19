@@ -44,6 +44,14 @@ pub fn recent(dir: &Path, limit: usize) -> Vec<Session> {
     sessions
 }
 
+/// Forgets every session. A history that was never written is already clear.
+pub fn clear(dir: &Path) -> std::io::Result<()> {
+    match fs::remove_file(file(dir)) {
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error),
+        _ => Ok(()),
+    }
+}
+
 /// Total time per game, longest first: the answer to "which one have I been
 /// playing all month".
 pub fn totals(dir: &Path, limit: usize) -> Vec<(String, u64)> {

@@ -3,6 +3,7 @@ mod commands;
 mod config;
 mod daemon;
 mod environment;
+mod game_watch;
 mod governor;
 mod hotkey;
 mod gamemode;
@@ -20,10 +21,11 @@ mod tweaks;
 
 use tauri::{AppHandle, Emitter, Manager};
 
-/// Privileged mode: pkexec starts the program again as `--run-ops <file>` and
-/// main() hands over here before any window exists.
-pub fn run_ops_file(path: &str) -> i32 {
-    commands::privileged::run_ops_file(path)
+/// Privileged mode: pkexec starts the program again as `--run-ops <file>`
+/// (with password) or `--run-tweaks <file>` (without) and main() hands over
+/// here before any window exists.
+pub fn run_ops_file(path: &str, with_password: bool) -> i32 {
+    commands::privileged::run_ops_file(path, with_password)
 }
 
 /// Service mode: the governor, with no window, as the system service of the
@@ -392,20 +394,31 @@ pub fn toggle_hud(app: &AppHandle) {
 /// settings, the tray and the shortcut all come through here, so the file and
 /// the screen never disagree.
 pub fn show_hud(app: &AppHandle) {
-    let Some(window) = overlay(app) else { return };
-    mark_as_panel(&window);
-    place_overlay(&window);
-    let _ = window.show();
-    let _ = window.set_always_on_top(true);
+    present_hud(app);
     remember_hud(app, true);
 }
 
 /// Takes the overlay off the screen and remembers that it is down.
 pub fn hide_hud(app: &AppHandle) {
+    withdraw_hud(app);
+    remember_hud(app, false);
+}
+
+/// Puts the overlay on screen without touching the choice of the user: what
+/// a game that starts does when the overlay is set to come with the game.
+pub fn present_hud(app: &AppHandle) {
+    let Some(window) = overlay(app) else { return };
+    mark_as_panel(&window);
+    place_overlay(&window);
+    let _ = window.show();
+    let _ = window.set_always_on_top(true);
+}
+
+/// Takes the overlay off the screen without touching the choice of the user.
+pub fn withdraw_hud(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("overlay") {
         let _ = window.hide();
     }
-    remember_hud(app, false);
 }
 
 fn remember_hud(app: &AppHandle, enabled: bool) {
@@ -463,6 +476,10 @@ pub fn run() {
             commands::settings::config_path,
             commands::settings::apply_hotkeys,
             commands::settings::set_hud_enabled,
+            commands::settings::settings_export,
+            commands::settings::settings_import,
+            commands::settings::settings_reset,
+            commands::governor::history_clear,
             commands::monitor::monitor_snapshot,
             commands::governor::governor_status,
             commands::governor::governor_catalogue,
@@ -512,16 +529,35 @@ pub fn run() {
             // The readings of the machine go on while the program runs, so the
             // overlay and the window show the latest one at once.
             monitor::start(handle.clone());
+            // Notifications and the overlay that comes with the game.
+            game_watch::start(handle.clone());
+            // An entry of the session written by an older version has no
+            // flag to start in the tray: it is written again.
+            if autostart::is_enabled() {
+                let _ = autostart::set(true);
+            }
             // A launch from the shortcut of the desktop opens the panel at once.
             if let Some(action) = &launched_as {
                 apply_action(&handle, action);
+            } else {
+                // The window is created hidden: the session can start the
+                // panel straight into the tray, when the user asked for that.
+                let autostarted = std::env::args().any(|arg| arg == autostart::FLAG);
+                if !(autostarted && config::load().start_minimized) {
+                    show_window(&handle);
+                }
             }
             Ok(())
         })
         // The panel lives in the tray: closing the window only hides it, and
-        // the way out is the tray menu.
+        // the way out is the tray menu, unless the user asked for the window
+        // to close the program.
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" && !config::load().close_to_tray {
+                    window.app_handle().exit(0);
+                    return;
+                }
                 api.prevent_close();
                 let _ = window.hide();
             }

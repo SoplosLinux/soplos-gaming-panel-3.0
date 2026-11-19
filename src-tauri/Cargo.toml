@@ -32,6 +32,11 @@ gtk = "0.18"
 # v0_6: is_supported (0.5) and set_keyboard_mode (0.6) of the C library.
 # Debian has 0.9 in trixie and 0.10 in forky.
 gtk-layer-shell = { version = "0.8", features = ["v0_6"] }
+# The games of Lutris, read from its own database (pga.db), apt or Flatpak.
+# Bundled: no libsqlite3-dev at build time.
+rusqlite = { version = "0.32", features = ["bundled"] }
+# The notifications of the game mode, as Soplos Repo Manager sends its own.
+notify-rust = "4"
 
 [profile.release]
 panic = "abort"

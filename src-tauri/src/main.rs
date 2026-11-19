@@ -5,8 +5,8 @@ fn main() {
     // action of the package, to do what needs the administrator. It has to be
     // checked before Tauri starts, because it never opens a window.
     let args: Vec<String> = std::env::args().collect();
-    if args.len() == 3 && args[1] == "--run-ops" {
-        std::process::exit(soplos_gaming_panel_lib::run_ops_file(&args[2]));
+    if args.len() == 3 && (args[1] == "--run-ops" || args[1] == "--run-tweaks") {
+        std::process::exit(soplos_gaming_panel_lib::run_ops_file(&args[2], args[1] == "--run-ops"));
     }
 
     // Service mode: systemd starts this same binary to govern the kernel while

@@ -8,6 +8,30 @@ First stable release.
 
 ### Added
 
+- Settings, overlay: eight new cells (disk, fans, voltage, battery, sched_ext
+  scheduler with the CPU governor, profile, time played and clock); show the
+  overlay with the game (it appears when a game starts and goes away when it
+  ends, without touching the switch of the user); refresh every 0.5, 1 or 2
+  seconds, which the monitor follows too; and an alert temperature for the
+  processor and the graphics card, from which the figure turns red.
+- Settings, session and tray: start in the tray when the session starts the
+  panel (`--autostart`); closing the window can quit the panel instead of
+  leaving it in the tray; and a notification of the desktop when the game
+  mode turns on or off, with the name of the game. The notifications and the
+  overlay that comes with the game read the files the daemon leaves in /run,
+  without asking the daemon.
+- Settings, appearance: the theme can be fixed to light or dark or follow the
+  desktop, and temperatures can be shown in degrees Fahrenheit, in the
+  window and the overlay.
+- Settings, data: export and import the settings to a file, restore the
+  defaults, and clear the history of games (the daemon deletes it, as it
+  writes it as root).
+- Monitor: the battery of the laptop, leaving out the batteries of a mouse or
+  a pad.
+- Game mode: what each scheduler of sched_ext does, in a line under the
+  choice and in a list of every scheduler with a mark for the ones made for
+  games, the experimental ones and the ones only for testing. The texts come
+  from the README of each scheduler in scx 1.1.4.
 - Rewrite in the stack of the 3.0 programs of Soplos Linux (Tauri 2, Svelte 4,
   TypeScript, Tailwind), replacing the Python prototype.
 - Window without system frame, with the Soplos palette, light and dark themes
@@ -58,6 +82,42 @@ First stable release.
 
 ### Fixed
 
+- MangoHud: ticking an option wrote it as `key=` with an empty value, which
+  MangoHud reads as 0 and turns the option off, so every option ticked in the
+  panel disappeared from the overlay. Options that are only on or off are now
+  written as the key alone, as MangoHud and GOverlay expect. The panel also
+  reads those lines (the ones GOverlay writes) as options that are on, and a
+  later copy of a key is dropped when the key is set. Options with a value
+  write a default (font size 24, position top-left, toggle key Shift_R+F12)
+  instead of the key alone.
+- MangoHud: the configuration is always `~/.config/MangoHud/MangoHud.conf`.
+  The Flatpak path the panel looked for did not exist; the Flatpaks of Steam,
+  Lutris and Heroic mount that folder of the host and read the same file.
+- MangoHud log: it used `output_file`, which MangoHud no longer reads. It now
+  sets `output_folder`, `autostart_log`, `log_duration` and `log_interval`
+  (without an interval MangoHud writes nothing while the game runs). The
+  folder is one a game inside the Flatpak of Steam can write in, and the
+  overlay reads the frames per second from the newest log still being
+  written, leaving the summary out.
+- Library: the games of Lutris are read from its database (`pga.db`, apt or
+  Flatpak) instead of `lutris -l`. Lutris is a single instance application:
+  with its window open the question went to that window and no game came
+  back. Games hidden in Lutris are left out.
+- Library: the clients of other stores (Battle.net, Epic Games Store, EA app,
+  Ubisoft Connect, GOG Galaxy, Amazon Games and any launcher) are no longer
+  listed as games, from Lutris or from the menu; nor are Proton, the Steam
+  Linux Runtime and the Steamworks redistributables.
+- Library: the games of Steam start through `steam://rungameid/`, which the
+  Steam installed answers, apt or Flatpak; `steam -applaunch` failed with the
+  Flatpak, which has no `steam` command on the host.
+- GameMode: changing the scheduler or its mode asked for the password every
+  time. The daemon of the panel does it now, as root, only for the user the
+  socket is closed to; the window asks the scheduler service itself only when
+  the daemon cannot.
+- GameMode: the system tweaks, the sensor chips and starting or stopping the
+  service asked for the password. They go through a polkit action of their
+  own (`--run-tweaks`, `allow_active` yes), checked again as root and unable
+  to install anything; installing packages still asks for the password.
 - Copyright: the file named `soplos-theme-manager` as the upstream package and
   pointed at its repository; it now names `soplos-gaming-panel`.
 - Manual page: it documents the `--daemon` and `--daemon-restore` flags of the
