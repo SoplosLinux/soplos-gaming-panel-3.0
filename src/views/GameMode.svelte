@@ -70,6 +70,9 @@
   let scx: ScxState = { kernel: false, service: false, current: "unknown", mode: 0, supported: [] };
   const scxModes = ["auto", "gaming", "powersave", "lowlatency", "server"];
   let error = "";
+  // An error of something the user did stays until the next thing they do;
+  // only an error of reaching the daemon goes away by itself when it answers.
+  let errorOfAction = false;
   let busy = false;
   let details = false;
   let manualName = "";
@@ -122,7 +125,7 @@
     }
     try {
       status = await governorStatus();
-      error = "";
+      if (!errorOfAction) error = "";
     } catch {
       status = null;
     }
@@ -193,8 +196,10 @@
     try {
       await action();
       error = "";
+      errorOfAction = false;
     } catch (reason) {
       error = explain(reason);
+      errorOfAction = true;
     }
     await refresh();
     busy = false;

@@ -185,12 +185,24 @@ fn restore_in(dir: &std::path::Path) -> Result<Value, String> {
         return Ok(json!({ "restored": [] }));
     };
     let mut done = Vec::with_capacity(saved.entries.len());
-    let mut failures = Vec::new();
+    let mut pending: Vec<&state::Entry> = Vec::new();
     for entry in saved.entries.iter().rev() {
         if restored_by_its_ratio(entry) {
             done.push(json!({ "key": entry.key, "value": entry.value }));
             continue;
         }
+        match lever::write(std::path::Path::new(&entry.path), &entry.value) {
+            Ok(()) => done.push(json!({ "key": entry.key, "value": entry.value })),
+            Err(_) => pending.push(entry),
+        }
+    }
+    // Some nodes take a value only once another one is back: the energy
+    // preference of a core is refused while its governor is still at
+    // "performance". What failed is tried once more, after the rest; a state
+    // saved by an older version, with the governor before the preference,
+    // comes back this way too.
+    let mut failures = Vec::new();
+    for entry in pending {
         match lever::write(std::path::Path::new(&entry.path), &entry.value) {
             Ok(()) => done.push(json!({ "key": entry.key, "value": entry.value })),
             Err(error) => failures.push(json!({ "key": entry.key, "error": error.to_string() })),

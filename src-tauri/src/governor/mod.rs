@@ -24,6 +24,20 @@ pub fn catalogue() -> (Vec<Box<dyn Lever>>, Vec<Missing>) {
     let mut levers: Vec<Box<dyn Lever>> = Vec::new();
     let mut missing: Vec<Missing> = Vec::new();
 
+    let cpu = cpufreq_root();
+    // The energy preference goes before the governor, and so it is put back
+    // after it (the restore goes in reverse). With the governor at
+    // "performance", amd-pstate and intel_pstate refuse any other preference
+    // (EBUSY): restoring the preference first failed, the state stayed, and
+    // the game mode could not be turned off. Every core has its own
+    // preference, as it has its own governor.
+    let epp = cpu.join("energy_performance_preference");
+    if node::exists(&epp) {
+        levers.push(Box::new(node::Node::per_core("cpu.epp", "cpu", epp, "energy_performance_preference", "performance")));
+    } else {
+        missing.push(Missing { key: "cpu.epp", group: "cpu", reason: "no_epp", fix: Fix::Hardware });
+    }
+
     match cpu::CpuGovernor::new() {
         Some(governor) => levers.push(Box::new(governor)),
         None => missing.push(Missing {
@@ -32,15 +46,6 @@ pub fn catalogue() -> (Vec<Box<dyn Lever>>, Vec<Missing>) {
             reason: "no_cpufreq",
             fix: Fix::Hardware,
         }),
-    }
-
-    let cpu = cpufreq_root();
-    // Every core has its own energy preference, as it has its own governor.
-    let epp = cpu.join("energy_performance_preference");
-    if node::exists(&epp) {
-        levers.push(Box::new(node::Node::per_core("cpu.epp", "cpu", epp, "energy_performance_preference", "performance")));
-    } else {
-        missing.push(Missing { key: "cpu.epp", group: "cpu", reason: "no_epp", fix: Fix::Hardware });
     }
     add(
         &mut levers,

@@ -109,6 +109,16 @@ First stable release.
 - Eleven names of levers and the group of the network showed their key, and two
   errors came in Spanish; they are now in the eight languages and in English.
 - The kernels page never found BTF (`DEBUG_INFO_BTF` without its `CONFIG_`).
+- The game mode could not be turned off on machines with an energy
+  preference (amd-pstate, intel_pstate): the restore put the preference back
+  while the governor was still at `performance`, which those drivers refuse,
+  so the restore failed and the profile stayed. The preference now goes before
+  the governor, so it comes back after it, and whatever a restore cannot write
+  is tried again once the rest is back, which also frees a state saved by the
+  older order.
+- An error of the GameMode page vanished at once: the reading of the daemon,
+  every two seconds, wiped it. An error of something the user did now stays
+  until the next action.
 
 ### Changed
 
