@@ -28,8 +28,9 @@
 
   $: deLabel = envInfo ? (DE_LABELS[envInfo.desktopEnvironment] ?? envInfo.desktopEnvironment) : "";
   $: protoLabel = envInfo ? (PROTO_LABELS[envInfo.displayProtocol] ?? "") : "";
-  // "3.0.0-1-beta" is shown as "3.0.0-beta": the Debian revision is not shown.
-  $: shownVersion = (appVersion ?? "").replace(/-\d+-/, "-");
+  // The Debian revision is not shown: "3.0.0-1-beta" -> "3.0.0-beta",
+  // "3.0.0-1" -> "3.0.0". About still shows the whole version.
+  $: shownVersion = (appVersion ?? "").replace(/-\d+(?=-|$)/, "");
   // The same footer as the other 3.0 programs: "Plasma · Wayland · 3.0.0".
   $: footerLabel = [deLabel, protoLabel, shownVersion].filter(Boolean).join(" · ") || "Soplos Gaming Panel";
 

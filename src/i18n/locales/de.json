@@ -155,9 +155,11 @@
       "scx_nitosis": "Experimentelle Version von scx_mitosis. Braucht einen neueren Kernel als die aktuellen.",
       "scx_p2dq": "Für alles: Verteilt die Last auf die Caches des Prozessors und wählt den weniger belegten von zwei Plätzen.",
       "scx_pandemonium": "Passt jede Entscheidung in Echtzeit an eine gemessene Latenzgrenze an, ohne Klassen von Aufgaben. Zielt auf schnelle Antworten unter Last.",
-      "scx_rlfifo": "Ein einfaches Rundlaufverfahren als Vorlage für Tests. Nicht für den Alltag.",
-      "scx_rustland": "Seine Logik läuft als normales Programm in Rust. Bevorzugt Interaktives: Spiele, Videoanrufe, Streaming.",
+      "scx_rburst": "Wie EEVDF führt er zuerst die Aufgabe mit der nächsten Frist aus, gemessen an den Schüben, die jede Aufgabe zwischen zwei Pausen läuft. In Rust geschrieben, noch experimentell.",
+      "scx_reevdf": "scx_eevdf vollständig in Rust neu geschrieben, mit derselben Logik virtueller Fristen. Noch experimentell.",
+      "scx_rlocal": "Eine Warteschlange pro Kern, damit jede Aufgabe eher dort läuft, wo ihr Cache ist. In Rust geschrieben, noch experimentell.",
       "scx_rusty": "Gleicht die Last zwischen Bereichen des Prozessors aus und lässt sich für jeden Rechner und jede Arbeit einstellen.",
+      "scx_rvtime": "Der einfachste der in Rust geschriebenen: eine einzige Warteschlange nach virtueller Zeit, gewichtet nach der Priorität jeder Aufgabe. Noch experimentell.",
       "scx_tickless": "Für Server, virtuelle Maschinen und Berechnungen: nimmt Systemrauschen von den meisten Kernen. Nicht für Spiele."
     },
     "modes": {

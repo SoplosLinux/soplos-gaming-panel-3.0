@@ -2,6 +2,22 @@
 
 All notable changes to Soplos Gaming Panel are documented in this file.
 
+## [3.0.0-1] - 2026-11-27
+
+### Changed
+
+- The descriptions of the schedulers follow scx 1.1.5. scx_rburst, scx_reevdf,
+  scx_rlocal and scx_rvtime have a description in the eight languages and are
+  marked as experimental; scx_tickless is marked as experimental too.
+  scx_rustland and scx_rlfifo, which scx removed, are gone from the list and
+  from the translations.
+
+### Fixed
+
+- The corner of the window showed the Debian revision of a version without a
+  stage ("3.0.0-1"). It now shows "3.0.0"; About still shows the whole
+  version.
+
 ## [3.0.0] - 2026-11-18
 
 First stable release.

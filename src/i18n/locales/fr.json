@@ -155,9 +155,11 @@
       "scx_nitosis": "Version expérimentale de scx_mitosis. Il faut un noyau plus récent que les actuels.",
       "scx_p2dq": "Polyvalent : répartit la charge entre les caches du processeur en choisissant le moins occupé de deux endroits.",
       "scx_pandemonium": "Ajuste chaque décision en temps réel à une limite de latence qu’il mesure, sans classes de tâches. Vise des réponses rapides sous charge.",
-      "scx_rlfifo": "Un simple tourniquet, comme modèle pour les tests. Pas pour tous les jours.",
-      "scx_rustland": "Sa politique tourne comme un programme normal, en Rust. Donne la priorité à l’interactif : jeux, appels vidéo, streaming.",
+      "scx_rburst": "Comme EEVDF, exécute d’abord la tâche à l’échéance la plus proche, mesurée sur les rafales que chaque tâche exécute entre deux attentes. Écrit en Rust, encore expérimental.",
+      "scx_reevdf": "scx_eevdf réécrit entièrement en Rust, avec la même politique d’échéances virtuelles. Encore expérimental.",
+      "scx_rlocal": "Une file par cœur, pour que chaque tâche tende à s’exécuter là où se trouve son cache. Écrit en Rust, encore expérimental.",
       "scx_rusty": "Équilibre la charge entre les domaines du processeur et se règle pour toute machine ou tout travail.",
+      "scx_rvtime": "Le plus simple de ceux écrits en Rust : une seule file ordonnée par temps virtuel, pondérée par la priorité de chaque tâche. Encore expérimental.",
       "scx_tickless": "Pour les serveurs, les machines virtuelles et le calcul : retire le bruit du système de la plupart des cœurs. Pas pour les jeux."
     },
     "modes": {

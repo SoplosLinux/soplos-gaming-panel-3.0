@@ -71,7 +71,7 @@
   let showSchedulerHelp = false;
 
   /** What the README of each scheduler says it is for, in a few words: the
-   * schedulers of scx 1.1.4 that scx-scheds ships. */
+   * schedulers of scx 1.1.5 that scx-scheds ships. */
   const SCHEDULER_HELP = new Set([
     "scx_beerland",
     "scx_bpfland",
@@ -90,9 +90,11 @@
     "scx_nitosis",
     "scx_p2dq",
     "scx_pandemonium",
-    "scx_rlfifo",
-    "scx_rustland",
+    "scx_rburst",
+    "scx_reevdf",
+    "scx_rlocal",
     "scx_rusty",
+    "scx_rvtime",
     "scx_tickless",
   ]);
 
@@ -102,14 +104,17 @@
     scx_bpfland: "gaming",
     scx_cake: "gaming",
     scx_lavd: "gaming",
-    scx_rustland: "gaming",
     scx_eevdf: "experimental",
     scx_flow: "experimental",
     scx_mavd: "experimental",
     scx_mlfq: "experimental",
     scx_nitosis: "experimental",
+    scx_rburst: "experimental",
+    scx_reevdf: "experimental",
+    scx_rlocal: "experimental",
+    scx_rvtime: "experimental",
+    scx_tickless: "experimental",
     scx_chaos: "testing",
-    scx_rlfifo: "testing",
   };
   const TAG_TINTS: Record<string, string> = {
     gaming: "bg-success/15 text-success",

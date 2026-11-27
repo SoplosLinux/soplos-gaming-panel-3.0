@@ -155,9 +155,11 @@
       "scx_nitosis": "Experimental version of scx_mitosis. It needs a newer kernel than the current ones.",
       "scx_p2dq": "General purpose: spreads the load across the caches of the processor, picking the less busy of two places.",
       "scx_pandemonium": "Adapts every decision in real time to a latency limit it measures, with no classes of tasks. Aims at quick answers under load.",
-      "scx_rlfifo": "A simple round robin, as a template for tests. Not for everyday use.",
-      "scx_rustland": "Its policy runs as a normal program, in Rust. Puts interactive tasks first: games, video calls, streaming.",
+      "scx_rburst": "Like EEVDF, runs first the task with the earliest deadline, measured on the bursts each task runs between sleeps. Written in Rust, still experimental.",
+      "scx_reevdf": "scx_eevdf rewritten entirely in Rust, with the same policy of virtual deadlines. Still experimental.",
+      "scx_rlocal": "One queue per core, so each task tends to run where its cache is. Written in Rust, still experimental.",
       "scx_rusty": "Balances the load between domains of the processor and can be tuned for any machine or workload.",
+      "scx_rvtime": "The simplest one written in Rust: a single queue ordered by virtual time, weighted by the priority of each task. Still experimental.",
       "scx_tickless": "For servers, virtual machines and computing: removes noise of the system from most cores. Not for games."
     },
     "modes": {
